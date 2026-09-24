@@ -1,7 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status,
+    Form
+)
+from app.services.audit_log import log_audit_event
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic.v1 import Field
+
 from sqlalchemy.orm import Session
+
 import secrets
 from datetime import datetime, timedelta
 
@@ -9,6 +17,7 @@ from app.core.dependencies import (
     get_db,
     get_current_user
 )
+
 from app.core.security import (
     hash_password,
     verify_password,
@@ -18,8 +27,10 @@ from app.core.security import (
 from app.models.user import User
 from app.models.role import Role
 from app.models.password_reset_token import PasswordResetToken
+
 from app.services.email_service import send_reset_password_email
 from app.services.auth import register_customer
+
 from app.schemas.auth import (
     RegisterRequest,
     TokenResponse,
@@ -30,6 +41,10 @@ from app.schemas.auth import (
 
 router = APIRouter()
 
+
+# =========================================================
+# REGISTER
+# =========================================================
 
 @router.post(
     "/register",
@@ -52,11 +67,32 @@ def register(
         service_ids=data.service_ids
     )
 
-    user = db.query(User).filter(
-        User.user_id == user_id
-    ).first()
+    # Ghi audit đăng ký tài khoản
+    log_audit_event(
+        db=db,
+        user_id=user_id,
+        action="REGISTER",
+        table_name="users",
+        record_id=user_id,
+        new_value={
+            "username": data.username,
+            "email": data.email,
+            "full_name": data.full_name
+        }
+    )
+
+    user = (
+        db.query(User)
+        .filter(User.user_id == user_id)
+        .first()
+    )
 
     return user
+
+
+# =========================================================
+# LOGIN
+# =========================================================
 
 @router.post(
     "/login",
@@ -66,19 +102,28 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    """
-    Đăng nhập bằng username + password.
-    """
-
-    # 1. Tìm user
     user = (
         db.query(User)
         .filter(User.username == form_data.username)
         .first()
     )
 
-    # 2. Không tìm thấy user
+    # Không tìm thấy username
     if user is None:
+        return_error = True
+
+        log_audit_event(
+            db=db,
+            user_id=None,
+            action="LOGIN_FAILED",
+            table_name="users",
+            record_id=None,
+            new_value={
+                "username": form_data.username,
+                "reason": "USER_NOT_FOUND"
+            }
+        )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Username hoặc password không đúng",
@@ -87,11 +132,22 @@ def login(
             }
         )
 
-    # 3. Kiểm tra password
+    # Sai password
     if not verify_password(
         form_data.password,
         user.password_hash
     ):
+        log_audit_event(
+            db=db,
+            user_id=user.user_id,
+            action="LOGIN_FAILED",
+            table_name="users",
+            record_id=user.user_id,
+            new_value={
+                "reason": "INVALID_PASSWORD"
+            }
+        )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Username hoặc password không đúng",
@@ -100,14 +156,24 @@ def login(
             }
         )
 
-    # 4. Kiểm tra trạng thái tài khoản
+    # Tài khoản không hoạt động
     if user.status != "ACTIVE":
+        log_audit_event(
+            db=db,
+            user_id=user.user_id,
+            action="LOGIN_FAILED",
+            table_name="users",
+            record_id=user.user_id,
+            new_value={
+                "reason": "INACTIVE_ACCOUNT"
+            }
+        )
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tài khoản không hoạt động"
         )
 
-    # 5. Lấy role
     role = (
         db.query(Role)
         .filter(Role.role_id == user.role_id)
@@ -115,22 +181,50 @@ def login(
     )
 
     if role is None:
+        log_audit_event(
+            db=db,
+            user_id=user.user_id,
+            action="LOGIN_FAILED",
+            table_name="users",
+            record_id=user.user_id,
+            new_value={
+                "reason": "ROLE_NOT_FOUND"
+            }
+        )
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tài khoản chưa được phân quyền"
         )
 
-    # 6. Tạo JWT
+    # Tạo JWT
     access_token = create_access_token(
         user_id=user.user_id,
         username=user.username,
         role=role.role_name
     )
 
+    # Ghi audit đăng nhập thành công
+    log_audit_event(
+        db=db,
+        user_id=user.user_id,
+        action="LOGIN",
+        table_name="users",
+        record_id=user.user_id,
+        new_value={
+            "username": user.username,
+            "role": role.role_name
+        }
+    )
+
     return {
         "access_token": access_token,
         "token_type": "bearer"
     }
+# =========================================================
+# GET CURRENT USER
+# =========================================================
+
 @router.get(
     "/me",
     response_model=UserResponse
@@ -139,9 +233,15 @@ def get_me(
     current_user: User = Depends(get_current_user)
 ):
     return current_user
+
+
+# =========================================================
+# FORGOT PASSWORD
+# =========================================================
+
 @router.post("/forgot-password")
 def forgot_password(
-    username: str,
+    username: str = Form(...),
     db: Session = Depends(get_db)
 ):
     user = (
@@ -153,19 +253,24 @@ def forgot_password(
     # Không tiết lộ tài khoản có tồn tại hay không
     if user is None:
         return {
-            "message": "Nếu tài khoản tồn tại, email đặt lại mật khẩu đã được gửi"
+            "message": (
+                "Nếu tài khoản tồn tại, "
+                "email đặt lại mật khẩu đã được gửi"
+            )
         }
 
-    # Kiểm tra tài khoản có email hay chưa
     if not user.email:
         return {
-            "message": "Nếu tài khoản tồn tại, email đặt lại mật khẩu đã được gửi"
+            "message": (
+                "Nếu tài khoản tồn tại, "
+                "email đặt lại mật khẩu đã được gửi"
+            )
         }
 
     # Tạo token ngẫu nhiên
     raw_token = secrets.token_urlsafe(32)
 
-    # Tạo bản ghi yêu cầu đặt lại mật khẩu
+    # Lưu token vào database
     reset_token = PasswordResetToken(
         user_id=user.user_id,
         token=raw_token,
@@ -176,15 +281,37 @@ def forgot_password(
     db.add(reset_token)
     db.commit()
 
-    # Gửi email
+    # Gửi token qua Gmail SMTP
     send_reset_password_email(
         to_email=user.email,
         reset_token=raw_token
     )
 
+    # Ghi audit sau khi gửi email thành công
+    log_audit_event(
+        db=db,
+        user_id=user.user_id,
+        action="FORGOT_PASSWORD",
+        table_name="users",
+        record_id=user.user_id,
+        new_value={
+            "username": user.username,
+            "email": user.email
+        }
+    )
+
     return {
-        "message": "Nếu tài khoản tồn tại, email đặt lại mật khẩu đã được gửi"
-    }    
+        "message": (
+            "Nếu tài khoản tồn tại, "
+            "email đặt lại mật khẩu đã được gửi"
+        )
+    }
+
+
+# =========================================================
+# RESET PASSWORD
+# =========================================================
+
 @router.post("/reset-password")
 def reset_password(
     data: ResetPasswordRequest,
@@ -212,10 +339,11 @@ def reset_password(
             detail="Token đã hết hạn"
         )
 
-    # Tìm tài khoản
     user = (
         db.query(User)
-        .filter(User.user_id == reset_token.user_id)
+        .filter(
+            User.user_id == reset_token.user_id
+        )
         .first()
     )
 
@@ -225,7 +353,7 @@ def reset_password(
             detail="Không tìm thấy tài khoản"
         )
 
-    # Đổi mật khẩu
+    # Hash password mới
     user.password_hash = hash_password(
         data.new_password
     )
@@ -236,6 +364,18 @@ def reset_password(
     reset_token.used_at = datetime.now()
 
     db.commit()
+
+    # Ghi audit đặt lại mật khẩu
+    log_audit_event(
+        db=db,
+        user_id=user.user_id,
+        action="RESET_PASSWORD",
+        table_name="users",
+        record_id=user.user_id,
+        new_value={
+            "username": user.username
+        }
+    )
 
     return {
         "message": "Đặt lại mật khẩu thành công"

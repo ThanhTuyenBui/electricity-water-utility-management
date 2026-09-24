@@ -70,7 +70,6 @@ def counter_register(
     user_id = register_customer_at_counter(
         db=db,
         username=data.username,
-        password=data.password,
         email=data.email,
         full_name=data.full_name,
         service_ids=data.service_ids,
