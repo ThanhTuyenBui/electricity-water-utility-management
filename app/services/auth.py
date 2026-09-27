@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 
-from app.core.security import hash_password
+from app.core.security import ( hash_password, verify_password )
 from app.repositories.auth import register_customer as register_customer_repo
-
+from app.models.user import User
 
 def register_customer(
     db: Session,
@@ -32,3 +32,36 @@ def register_customer(
     )
 
     return user_id
+
+def change_password_service(
+    db: Session,
+    user: User,
+    old_password: str,
+    new_password: str
+):
+    # Kiểm tra mật khẩu cũ
+    if not verify_password(
+        old_password,
+        user.password_hash
+    ):
+        raise ValueError(
+            "Mật khẩu hiện tại không đúng"
+        )
+
+    # Không cho dùng lại mật khẩu cũ
+    if verify_password(
+        new_password,
+        user.password_hash
+    ):
+        raise ValueError(
+            "Mật khẩu mới phải khác mật khẩu hiện tại"
+        )
+
+    # Hash mật khẩu mới
+    user.password_hash = hash_password(
+        new_password
+    )
+
+    db.commit()
+
+    return True

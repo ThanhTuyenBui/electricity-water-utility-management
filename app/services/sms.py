@@ -24,3 +24,22 @@ class SMSService:
             phone_number,
             message
         )
+
+    def send_employee_password(
+        self,
+        phone_number: str,
+        username: str,
+        password: str
+    ):
+        message = (
+            "Đơn vị điện nước thông báo:\n"
+            "Tài khoản nhân viên của bạn đã được tạo.\n\n"
+            f"Tên đăng nhập: {username}\n"
+            f"Mật khẩu tạm thời: {password}\n\n"
+            "Vui lòng đăng nhập và đổi mật khẩu sau lần đầu sử dụng."
+        )
+
+        return self.provider.send_sms(
+            phone_number,
+            message
+        )

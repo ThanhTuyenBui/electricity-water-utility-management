@@ -29,13 +29,17 @@ from app.models.role import Role
 from app.models.password_reset_token import PasswordResetToken
 
 from app.services.email_service import send_reset_password_email
-from app.services.auth import register_customer
+from app.services.auth import (
+    register_customer,
+    change_password_service
+)
 
 from app.schemas.auth import (
     RegisterRequest,
     TokenResponse,
     UserResponse,
-    ResetPasswordRequest
+    ResetPasswordRequest,
+    ChangePasswordRequest
 )
 
 
@@ -380,3 +384,46 @@ def reset_password(
     return {
         "message": "Đặt lại mật khẩu thành công"
     }
+
+# =========================================================
+# CHANGE PASSWORD
+# =========================================================
+
+@router.post("/change-password")
+def change_password(
+    data: ChangePasswordRequest,
+
+    current_user: User = Depends(
+        get_current_user
+    ),
+
+    db: Session = Depends(get_db)
+):
+    """
+    Đổi mật khẩu khi người dùng đã đăng nhập.
+
+    Yêu cầu:
+    - Có JWT hợp lệ
+    - Nhập đúng mật khẩu hiện tại
+    - Mật khẩu mới phải khác mật khẩu cũ
+    """
+
+    try:
+
+        change_password_service(
+            db=db,
+            user=current_user,
+            old_password=data.old_password,
+            new_password=data.new_password
+        )
+
+        return {
+            "message": "Đổi mật khẩu thành công"
+        }
+
+    except ValueError as e:
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )

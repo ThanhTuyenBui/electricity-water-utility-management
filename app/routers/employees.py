@@ -35,6 +35,11 @@ from app.services.employee import (
     update_my_employee_service
 )
 
+from app.services.sms import SMSService
+
+import secrets
+import string
+
 
 router = APIRouter()
 
@@ -58,13 +63,43 @@ def create_employee(
 ):
     """
     Chỉ Admin được phép tạo nhân viên.
+
+    Hệ thống tự sinh mật khẩu tạm thời
+    và gửi mật khẩu cho nhân viên qua SMS.
     """
 
+    # =====================================================
+    # TỰ SINH MẬT KHẨU TẠM THỜI
+    # =====================================================
+
+    temporary_password = (
+        secrets.choice(string.ascii_uppercase)
+        + secrets.choice(string.ascii_lowercase)
+        + secrets.choice(string.digits)
+        + secrets.choice("@#$%")
+        + "".join(
+            secrets.choice(
+                string.ascii_letters
+                + string.digits
+                + "@#$%"
+            )
+            for _ in range(8)
+        )
+    )
+
+    # =====================================================
+    # HASH MẬT KHẨU TRƯỚC KHI LƯU DATABASE
+    # =====================================================
+
     password_hash = hash_password(
-        data.password
+        temporary_password
     )
 
     try:
+
+        # =================================================
+        # TẠO NHÂN VIÊN
+        # =================================================
 
         create_employee_service(
             db=db,
@@ -78,8 +113,25 @@ def create_employee(
             assigned_area=data.assigned_area
         )
 
+        # =================================================
+        # GỬI MẬT KHẨU TẠM THỜI QUA SMS
+        # =================================================
+
+        if data.phone:
+
+            sms_service = SMSService()
+
+            sms_service.send_customer_password(
+                phone_number=data.phone,
+                username=data.username,
+                password=temporary_password
+            )
+
         return {
-            "message": "Tạo nhân viên thành công"
+            "message": (
+                "Tạo nhân viên thành công. "
+                "Mật khẩu tạm thời đã được gửi qua SMS."
+            )
         }
 
     except Exception as e:
@@ -194,6 +246,7 @@ def get_my_employee(
     )
 
     if result is None:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy thông tin nhân viên"
@@ -357,6 +410,8 @@ def update_employee(
         )
 
     return result
+
+
 # =========================================================
 # 7. ADMIN - THAY ĐỔI TRẠNG THÁI NHÂN VIÊN
 # =========================================================

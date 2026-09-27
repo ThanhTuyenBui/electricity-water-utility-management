@@ -5,7 +5,7 @@ from app.database.database import engine
 
 from app.routers import auth
 from app.routers import employees
-from app.routers import customers
+from app.routers import customer
 from app.routers import customer_service
 
 import uvicorn
@@ -33,7 +33,7 @@ app.include_router(
 
 
 app.include_router(
-    customers.router,
+    customer.router,
     prefix="/api/customers",
     tags=["Customers"]
 )

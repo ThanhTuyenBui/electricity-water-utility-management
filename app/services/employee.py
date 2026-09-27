@@ -1,3 +1,6 @@
+import secrets
+import string
+
 from sqlalchemy.orm import Session
 
 from app.repositories.employee import (
@@ -10,6 +13,19 @@ from app.repositories.employee import (
     update_my_employee
 )
 
+from app.core.security import hash_password
+
+from app.services.sms import SMSService
+
+
+def generate_temporary_password(length: int = 10) -> str:
+    characters = string.ascii_letters + string.digits
+
+    return "".join(
+        secrets.choice(characters)
+        for _ in range(length)
+    )
+
 
 # =========================================================
 # 1. TẠO NHÂN VIÊN
@@ -18,14 +34,21 @@ from app.repositories.employee import (
 def create_employee_service(
     db: Session,
     username: str,
-    password_hash: str,
     employee_code: str,
     full_name: str,
-    phone: str | None,
+    phone: str,
     department: str | None,
     position: str | None,
     assigned_area: str | None
 ):
+    # Sinh mật khẩu tạm
+    temporary_password = generate_temporary_password()
+
+    # Hash mật khẩu trước khi lưu DB
+    password_hash = hash_password(
+        temporary_password
+    )
+
     try:
 
         create_employee(
@@ -41,6 +64,20 @@ def create_employee_service(
         )
 
         db.commit()
+
+        # Gửi SMS sau khi tạo tài khoản thành công
+        sms_service = SMSService()
+
+        sms_service.send_employee_password(
+            phone_number=phone,
+            username=username,
+            password=temporary_password
+        )
+
+        return {
+            "username": username,
+            "message": "Tạo nhân viên thành công"
+        }
 
     except Exception:
         db.rollback()
@@ -146,6 +183,11 @@ def get_my_employee_service(
         user_id=user_id
     )
 
+
+# =========================================================
+# 7. NHÂN VIÊN SỬA THÔNG TIN CỦA CHÍNH MÌNH
+# =========================================================
+
 def update_my_employee_service(
     db: Session,
     user_id: int,
@@ -153,6 +195,7 @@ def update_my_employee_service(
     phone: str | None
 ):
     try:
+
         update_my_employee(
             db=db,
             user_id=user_id,

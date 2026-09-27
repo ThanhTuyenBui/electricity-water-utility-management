@@ -8,11 +8,6 @@ class EmployeeCreate(BaseModel):
         max_length=50
     )
 
-    password: str = Field(
-        min_length=6,
-        max_length=100
-    )
-
     employee_code: str = Field(
         min_length=1,
         max_length=20
