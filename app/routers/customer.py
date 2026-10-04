@@ -98,6 +98,10 @@ def update_my_customer(
                 "full_name"
             ),
 
+            email=update_data.get(
+                "email"
+            ),
+
             phone=update_data.get(
                 "phone"
             ),

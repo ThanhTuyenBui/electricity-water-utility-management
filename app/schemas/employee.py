@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
 
 
@@ -18,9 +18,11 @@ class EmployeeCreate(BaseModel):
         max_length=100
     )
 
-    phone: Optional[str] = Field(
-        default=None,
-        max_length=15
+    email: EmailStr
+
+    phone: str = Field(
+        min_length=10,
+        max_length=10
     )
 
     department: Optional[str] = Field(
@@ -46,9 +48,12 @@ class EmployeeUpdate(BaseModel):
         max_length=100
     )
 
+    email: Optional[EmailStr] = None
+
     phone: Optional[str] = Field(
         default=None,
-        max_length=15
+        min_length=10,
+        max_length=10
     )
 
     department: Optional[str] = Field(
@@ -70,14 +75,18 @@ class EmployeeUpdate(BaseModel):
         default=None,
         max_length=20
     )
+
+
 class EmployeeStatusUpdate(BaseModel):
     status: str
+
 
 class EmployeeResponse(BaseModel):
     employee_id: int
     user_id: int
     employee_code: str
     full_name: str
+    email: Optional[str]
     phone: Optional[str]
     department: Optional[str]
     position: Optional[str]
@@ -87,6 +96,8 @@ class EmployeeResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class EmployeeSelfUpdate(BaseModel):
     full_name: str | None = None
+    email: EmailStr | None = None
     phone: str | None = None

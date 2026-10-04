@@ -1,6 +1,5 @@
 from app.providers.sms.fake_sms import FakeSMSProvider
 
-
 class SMSService:
 
     def __init__(self):

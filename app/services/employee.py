@@ -36,15 +36,14 @@ def create_employee_service(
     username: str,
     employee_code: str,
     full_name: str,
+    email: str,
     phone: str,
     department: str | None,
     position: str | None,
     assigned_area: str | None
 ):
-    # Sinh mật khẩu tạm
     temporary_password = generate_temporary_password()
 
-    # Hash mật khẩu trước khi lưu DB
     password_hash = hash_password(
         temporary_password
     )
@@ -57,6 +56,7 @@ def create_employee_service(
             password_hash=password_hash,
             employee_code=employee_code,
             full_name=full_name,
+            email=email,
             phone=phone,
             department=department,
             position=position,
@@ -65,7 +65,6 @@ def create_employee_service(
 
         db.commit()
 
-        # Gửi SMS sau khi tạo tài khoản thành công
         sms_service = SMSService()
 
         sms_service.send_employee_password(
@@ -122,6 +121,7 @@ def update_employee_service(
     db: Session,
     employee_id: int,
     full_name: str | None,
+    email: str | None,
     phone: str | None,
     department: str | None,
     position: str | None,
@@ -133,6 +133,7 @@ def update_employee_service(
             db=db,
             employee_id=employee_id,
             full_name=full_name,
+            email=email,
             phone=phone,
             department=department,
             position=position,
@@ -192,6 +193,7 @@ def update_my_employee_service(
     db: Session,
     user_id: int,
     full_name: str | None,
+    email: str | None,
     phone: str | None
 ):
     try:
@@ -200,6 +202,7 @@ def update_my_employee_service(
             db=db,
             user_id=user_id,
             full_name=full_name,
+            email=email,
             phone=phone
         )
 

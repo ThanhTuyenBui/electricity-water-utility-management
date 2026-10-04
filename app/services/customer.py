@@ -31,6 +31,7 @@ def update_customer_self_service(
     db: Session,
     user_id: int,
     full_name: str | None,
+    email: str | None,
     phone: str | None,
     identity_number: str | None
 ):
@@ -41,6 +42,7 @@ def update_customer_self_service(
             db=db,
             user_id=user_id,
             full_name=full_name,
+            email=email,
             phone=phone,
             identity_number=identity_number
         )

@@ -13,8 +13,6 @@ from app.core.dependencies import (
     require_roles
 )
 
-from app.core.security import hash_password
-
 from app.models.user import User
 
 from app.schemas.employee import (
@@ -34,11 +32,6 @@ from app.services.employee import (
     get_my_employee_service,
     update_my_employee_service
 )
-
-from app.services.sms import SMSService
-
-import secrets
-import string
 
 
 router = APIRouter()
@@ -64,75 +57,28 @@ def create_employee(
     """
     Chỉ Admin được phép tạo nhân viên.
 
-    Hệ thống tự sinh mật khẩu tạm thời
-    và gửi mật khẩu cho nhân viên qua SMS.
+    Hệ thống:
+    1. Tự sinh mật khẩu tạm thời.
+    2. Hash mật khẩu trước khi lưu database.
+    3. Tạo tài khoản nhân viên.
+    4. Gửi mật khẩu tạm thời qua SMS.
     """
-
-    # =====================================================
-    # TỰ SINH MẬT KHẨU TẠM THỜI
-    # =====================================================
-
-    temporary_password = (
-        secrets.choice(string.ascii_uppercase)
-        + secrets.choice(string.ascii_lowercase)
-        + secrets.choice(string.digits)
-        + secrets.choice("@#$%")
-        + "".join(
-            secrets.choice(
-                string.ascii_letters
-                + string.digits
-                + "@#$%"
-            )
-            for _ in range(8)
-        )
-    )
-
-    # =====================================================
-    # HASH MẬT KHẨU TRƯỚC KHI LƯU DATABASE
-    # =====================================================
-
-    password_hash = hash_password(
-        temporary_password
-    )
 
     try:
 
-        # =================================================
-        # TẠO NHÂN VIÊN
-        # =================================================
-
-        create_employee_service(
+        result = create_employee_service(
             db=db,
             username=data.username,
-            password_hash=password_hash,
             employee_code=data.employee_code,
             full_name=data.full_name,
+            email=str(data.email),
             phone=data.phone,
             department=data.department,
             position=data.position,
             assigned_area=data.assigned_area
         )
 
-        # =================================================
-        # GỬI MẬT KHẨU TẠM THỜI QUA SMS
-        # =================================================
-
-        if data.phone:
-
-            sms_service = SMSService()
-
-            sms_service.send_customer_password(
-                phone_number=data.phone,
-                username=data.username,
-                password=temporary_password
-            )
-
-        return {
-            "message": (
-                "Tạo nhân viên thành công. "
-                "Mật khẩu tạm thời đã được gửi qua SMS."
-            )
-        }
+        return result
 
     except Exception as e:
 
@@ -237,7 +183,7 @@ def get_my_employee(
     db: Session = Depends(get_db)
 ):
     """
-    Admin và NhânVien được xem thông tin của chính mình.
+    Admin và NhanVien được xem thông tin của chính mình.
     """
 
     result = get_my_employee_service(
@@ -273,10 +219,9 @@ def update_my_employee(
     db: Session = Depends(get_db)
 ):
     """
-    Admin và NhânVien được sửa thông tin của chính mình.
-
-    Chỉ cho phép sửa:
+    Admin và NhanVien được sửa:
     - full_name
+    - email
     - phone
     """
 
@@ -290,6 +235,11 @@ def update_my_employee(
             db=db,
             user_id=current_user.user_id,
             full_name=update_data.get("full_name"),
+            email=(
+                str(update_data["email"])
+                if update_data.get("email") is not None
+                else None
+            ),
             phone=update_data.get("phone")
         )
 
@@ -384,6 +334,11 @@ def update_employee(
             db=db,
             employee_id=employee_id,
             full_name=update_data.get("full_name"),
+            email=(
+                str(update_data["email"])
+                if update_data.get("email") is not None
+                else None
+            ),
             phone=update_data.get("phone"),
             department=update_data.get("department"),
             position=update_data.get("position"),

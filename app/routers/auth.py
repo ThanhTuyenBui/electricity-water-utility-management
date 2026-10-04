@@ -59,39 +59,74 @@ def register(
     data: RegisterRequest,
     db: Session = Depends(get_db)
 ):
-    user_id = register_customer(
-        db=db,
-        username=data.username,
-        password=data.password,
-        email=data.email,
-        full_name=data.full_name,
-        phone=data.phone,
-        identity_number=data.identity_number,
-        address=data.address,
-        service_ids=data.service_ids
-    )
+    try:
+        user_id = register_customer(
+            db=db,
+            username=data.username,
+            password=data.password,
+            email=data.email,
+            full_name=data.full_name,
+            phone=data.phone,
+            identity_number=data.identity_number,
+            address=data.address,
+            service_ids=data.service_ids
+        )
 
-    # Ghi audit đăng ký tài khoản
-    log_audit_event(
-        db=db,
-        user_id=user_id,
-        action="REGISTER",
-        table_name="users",
-        record_id=user_id,
-        new_value={
-            "username": data.username,
-            "email": data.email,
-            "full_name": data.full_name
-        }
-    )
+        # Ghi audit đăng ký tài khoản
+        log_audit_event(
+            db=db,
+            user_id=user_id,
+            action="REGISTER",
+            table_name="users",
+            record_id=user_id,
+            new_value={
+                "username": data.username,
+                "email": data.email,
+                "full_name": data.full_name
+            }
+        )
 
-    user = (
-        db.query(User)
-        .filter(User.user_id == user_id)
-        .first()
-    )
+        user = (
+            db.query(User)
+            .filter(User.user_id == user_id)
+            .first()
+        )
 
-    return user
+        return user
+
+    except Exception as e:
+        db.rollback()
+
+        error_message = str(e)
+
+        if "Username" in error_message and "đã tồn tại" in error_message:
+            detail = "Username đã tồn tại. Vui lòng chọn username khác."
+
+        elif "Email không đúng định dạng" in error_message:
+            detail = "Email không đúng định dạng. Vui lòng nhập lại."
+
+        elif "Email đã được sử dụng" in error_message:
+            detail = "Email đã được sử dụng. Vui lòng sử dụng email khác."
+
+        elif "Số điện thoại phải gồm 10 chữ số" in error_message:
+            detail = "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0."
+
+        elif "Số điện thoại khách hàng đã được sử dụng" in error_message:
+            detail = "Số điện thoại đã được sử dụng. Vui lòng sử dụng số khác."
+
+        elif "Khách hàng phải đăng ký ít nhất một dịch vụ" in error_message:
+            detail = "Vui lòng chọn ít nhất một dịch vụ."
+
+        elif "Dịch vụ ID" in error_message:
+            detail = "Dịch vụ được chọn không tồn tại hoặc không hoạt động."
+
+        else:
+            detail = "Đăng ký tài khoản thất bại. Vui lòng thử lại."
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail
+        )
 
 
 # =========================================================

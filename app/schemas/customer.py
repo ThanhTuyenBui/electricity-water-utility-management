@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
 
 
@@ -13,6 +13,8 @@ class CustomerSelfUpdate(BaseModel):
         min_length=1,
         max_length=100
     )
+
+    email: Optional[EmailStr] = None
 
     phone: Optional[str] = Field(
         default=None,

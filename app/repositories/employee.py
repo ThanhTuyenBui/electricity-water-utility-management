@@ -12,7 +12,8 @@ def create_employee(
     password_hash: str,
     employee_code: str,
     full_name: str,
-    phone: str | None,
+    email: str,
+    phone: str,
     department: str | None,
     position: str | None,
     assigned_area: str | None
@@ -24,6 +25,7 @@ def create_employee(
                 :password_hash,
                 :employee_code,
                 :full_name,
+                :email,
                 :phone,
                 :department,
                 :position,
@@ -35,6 +37,7 @@ def create_employee(
             "password_hash": password_hash,
             "employee_code": employee_code,
             "full_name": full_name,
+            "email": email,
             "phone": phone,
             "department": department,
             "position": position,
@@ -100,6 +103,7 @@ def update_employee(
     db: Session,
     employee_id: int,
     full_name: str | None,
+    email: str | None,
     phone: str | None,
     department: str | None,
     position: str | None,
@@ -110,6 +114,7 @@ def update_employee(
             CALL update_employee(
                 :employee_id,
                 :full_name,
+                :email,
                 :phone,
                 :department,
                 :position,
@@ -119,6 +124,7 @@ def update_employee(
         {
             "employee_id": employee_id,
             "full_name": full_name,
+            "email": email,
             "phone": phone,
             "department": department,
             "position": position,
@@ -171,10 +177,17 @@ def get_my_employee(
     )
 
     return result.mappings().first()
+
+
+# =========================================================
+# 7. NHÂN VIÊN SỬA THÔNG TIN CỦA CHÍNH MÌNH
+# =========================================================
+
 def update_my_employee(
     db: Session,
     user_id: int,
     full_name: str | None,
+    email: str | None,
     phone: str | None
 ):
     db.execute(
@@ -182,12 +195,14 @@ def update_my_employee(
             CALL update_my_employee_profile(
                 :user_id,
                 :full_name,
+                :email,
                 :phone
             )
         """),
         {
             "user_id": user_id,
             "full_name": full_name,
+            "email": email,
             "phone": phone
         }
     )

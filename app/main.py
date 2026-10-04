@@ -7,6 +7,7 @@ from app.routers import auth
 from app.routers import employees
 from app.routers import customer
 from app.routers import customer_service
+from app.routers import meter
 
 import uvicorn
 from app.core.config import settings
@@ -41,8 +42,15 @@ app.include_router(
 
 app.include_router(
     customer_service.router,
-    prefix="/api"
+    prefix="/api",
+    tags=["Customer Services"]
 )
+
+
+app.include_router(   
+    meter.router,
+    prefix="/api",
+    tags=["Meters"])
 
 
 @app.get("/test-db")
