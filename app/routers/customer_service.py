@@ -404,3 +404,32 @@ def get_customer_pending_services(
             status_code=400,
             detail=message
         )    
+
+@router.get(
+    "/customers/{customer_id}/pending-stop",
+    dependencies=[Depends(require_roles("NhanVien"))]
+)
+def get_customer_pending_stop_services(
+    customer_id: int,
+    db: Session = Depends(get_db)
+):
+    try:
+        result = get_pending_stop_customer_service_detail(
+            db=db,
+            customer_id=customer_id
+        )
+        return result
+
+    except Exception as e:
+        message = str(e)
+
+        if "Không tìm thấy khách hàng" in message:
+            raise HTTPException(
+                status_code=404,
+                detail="Không tìm thấy khách hàng"
+            )
+
+        raise HTTPException(
+            status_code=400,
+            detail=message
+        )    

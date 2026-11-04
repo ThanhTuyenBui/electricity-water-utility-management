@@ -8,6 +8,7 @@ from app.routers import employees
 from app.routers import customer
 from app.routers import customer_service
 from app.routers import meter
+from app.routers import tariff
 
 import uvicorn
 from app.core.config import settings
@@ -53,6 +54,11 @@ app.include_router(
     tags=["Meters"])
 
 
+app.include_router(
+    tariff.router,
+    prefix="/api",
+    tags=["Tariff Management"]
+)
 @app.get("/test-db")
 def test_database():
 

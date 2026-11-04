@@ -10,7 +10,6 @@ def create_employee(
     db: Session,
     username: str,
     password_hash: str,
-    employee_code: str,
     full_name: str,
     email: str,
     phone: str,
@@ -23,7 +22,6 @@ def create_employee(
             CALL register_employee(
                 :username,
                 :password_hash,
-                :employee_code,
                 :full_name,
                 :email,
                 :phone,
@@ -35,7 +33,6 @@ def create_employee(
         {
             "username": username,
             "password_hash": password_hash,
-            "employee_code": employee_code,
             "full_name": full_name,
             "email": email,
             "phone": phone,

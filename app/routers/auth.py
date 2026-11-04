@@ -99,29 +99,38 @@ def register(
 
         error_message = str(e)
 
-        if "Username" in error_message and "đã tồn tại" in error_message:
-            detail = "Username đã tồn tại. Vui lòng chọn username khác."
+        if "Tên đăng nhập đã tồn tại" in error_message:
+            detail = "Tên đăng nhập đã tồn tại. Vui lòng chọn username khác."
 
         elif "Email không đúng định dạng" in error_message:
             detail = "Email không đúng định dạng. Vui lòng nhập lại."
 
         elif "Email đã được sử dụng" in error_message:
-            detail = "Email đã được sử dụng. Vui lòng sử dụng email khác."
+            detail = "Email đã tồn tại. Vui lòng sử dụng email khác."
 
         elif "Số điện thoại phải gồm 10 chữ số" in error_message:
             detail = "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0."
 
-        elif "Số điện thoại khách hàng đã được sử dụng" in error_message:
-            detail = "Số điện thoại đã được sử dụng. Vui lòng sử dụng số khác."
+        elif "Số điện thoại đã được sử dụng" in error_message:
+            detail = "Số điện thoại đã tồn tại. Vui lòng sử dụng số khác."
 
-        elif "Khách hàng phải đăng ký ít nhất một dịch vụ" in error_message:
+        elif "Số định danh cá nhân phải gồm đúng 12 chữ số" in error_message:
+            detail = "Số định danh cá nhân phải gồm đúng 12 chữ số."
+
+        elif "Số định danh cá nhân đã được sử dụng" in error_message:
+            detail = "Số định danh cá nhân đã tồn tại."
+
+        elif "Phải chọn ít nhất một dịch vụ" in error_message:
             detail = "Vui lòng chọn ít nhất một dịch vụ."
 
-        elif "Dịch vụ ID" in error_message:
-            detail = "Dịch vụ được chọn không tồn tại hoặc không hoạt động."
+        elif "Mã dịch vụ không hợp lệ" in error_message:
+            detail = "Dịch vụ được chọn không tồn tại hoặc không hợp lệ."
+
+        elif "dịch vụ trùng nhau" in error_message:
+            detail = "Không được chọn trùng dịch vụ."
 
         else:
-            detail = "Đăng ký tài khoản thất bại. Vui lòng thử lại."
+            detail = error_message
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

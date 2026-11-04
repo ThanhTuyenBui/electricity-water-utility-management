@@ -317,3 +317,28 @@ def get_pending_stop_customer_service_detail(
     db.commit()
 
     return data
+def get_pending_stop_customer_service_detail(
+    db: Session,
+    customer_id: int
+):
+    cursor_name = "pending_stop_customer_service_detail_cursor"
+
+    db.execute(text("""
+        CALL get_pending_stop_customer_service_detail(
+            :customer_id,
+            :cursor_name
+        )
+    """), {
+        "customer_id": customer_id,
+        "cursor_name": cursor_name
+    })
+
+    result = db.execute(
+        text(f'FETCH ALL FROM "{cursor_name}"')
+    )
+
+    data = result.mappings().all()
+
+    db.commit()
+
+    return data

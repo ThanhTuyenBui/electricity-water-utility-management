@@ -69,7 +69,6 @@ def create_employee(
         result = create_employee_service(
             db=db,
             username=data.username,
-            employee_code=data.employee_code,
             full_name=data.full_name,
             email=str(data.email),
             phone=data.phone,
@@ -81,12 +80,17 @@ def create_employee(
         return result
 
     except Exception as e:
+        db.rollback()
+
+        if hasattr(e, "orig") and hasattr(e.orig, "diag"):
+            message = e.orig.diag.message_primary
+        else:
+            message = str(e)
 
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            status_code=400,
+            detail=message
         )
-
 
 # =========================================================
 # 2. ADMIN - XEM DANH SÁCH NHÂN VIÊN
@@ -244,10 +248,16 @@ def update_my_employee(
         )
 
     except Exception as e:
+        db.rollback()
+
+        if hasattr(e, "orig") and hasattr(e.orig, "diag"):
+            message = e.orig.diag.message_primary
+        else:
+            message = str(e)
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=message
         )
 
     result = get_my_employee_service(
@@ -346,10 +356,16 @@ def update_employee(
         )
 
     except Exception as e:
+        db.rollback()
+
+        if hasattr(e, "orig") and hasattr(e.orig, "diag"):
+            message = e.orig.diag.message_primary
+        else:
+            message = str(e)
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=message
         )
 
     result = get_employee_by_id_service(

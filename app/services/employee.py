@@ -34,7 +34,6 @@ def generate_temporary_password(length: int = 10) -> str:
 def create_employee_service(
     db: Session,
     username: str,
-    employee_code: str,
     full_name: str,
     email: str,
     phone: str,
@@ -54,7 +53,6 @@ def create_employee_service(
             db=db,
             username=username,
             password_hash=password_hash,
-            employee_code=employee_code,
             full_name=full_name,
             email=email,
             phone=phone,
