@@ -2,8 +2,8 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
-    Query,
-    status
+    status,
+    Query
 )
 
 from sqlalchemy.orm import Session
@@ -17,16 +17,22 @@ from app.core.dependencies import (
 from app.models.user import User
 
 from app.schemas.meter import (
-    MeterUpdate
+    MeterReadingCreate,
+    MeterReadingResponse
 )
 
 from app.services.meter import (
-    get_meters_for_admin_service,
-    get_meter_detail_service,
-    update_meter_after_approval_service,
-    get_my_meters_service
+    get_meters,
+    get_meter_detail,
+    get_meter_readings,
+    get_meter_reading_detail,
+    record_meter_reading
 )
 
+
+# ============================================================
+# ROUTER QUẢN LÝ CÔNG TƠ
+# ============================================================
 
 router = APIRouter(
     prefix="/meters",
@@ -35,151 +41,136 @@ router = APIRouter(
 
 
 # ============================================================
-# 1. ADMIN - DANH SÁCH / TÌM KIẾM CÔNG TƠ
+# 1. LẤY DANH SÁCH CÔNG TƠ
+# Admin: tất cả
+# Nhân viên: tất cả
+# Khách hàng: công tơ của mình
 # ============================================================
 
 @router.get(
     "/",
     dependencies=[
-        Depends(require_roles("Admin"))
+        Depends(require_roles("Admin", "NhanVien", "KhachHang"))
     ]
 )
-def get_meters_for_admin(
-    search_area: str | None = Query(default=None),
-    search_customer: str | None = Query(default=None),
-    search_meter: str | None = Query(default=None),
-
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=10, ge=1, le=100),
-
-    db: Session = Depends(get_db)
+def api_get_meters(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    status: str = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    try:
-
-        result = get_meters_for_admin_service(
-            db=db,
-            search_area=search_area,
-            search_customer=search_customer,
-            search_meter=search_meter,
-            page=page,
-            page_size=page_size
-        )
-
-        return {
-            "page": page,
-            "page_size": page_size,
-            "data": result
-        }
-
-    except Exception as e:
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    return get_meters(
+        db=db,
+        current_user=current_user,
+        page=page,
+        page_size=page_size,
+        status=status
+    )
 
 
 # ============================================================
-# 2. ADMIN - XEM CHI TIẾT CÔNG TƠ
+# 2. LẤY CHI TIẾT CÔNG TƠ
 # ============================================================
 
 @router.get(
     "/{meter_id}",
     dependencies=[
-        Depends(require_roles("Admin"))
+        Depends(require_roles("Admin", "NhanVien", "KhachHang"))
     ]
 )
-def get_meter_detail(
+def api_get_meter_detail(
     meter_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    try:
-
-        result = get_meter_detail_service(
-            db=db,
-            meter_id=meter_id
-        )
-
-        return result
-
-    except Exception as e:
-
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+    return get_meter_detail(
+        db=db,
+        current_user=current_user,
+        meter_id=meter_id
+    )
 
 
 # ============================================================
-# 3. ADMIN - CẬP NHẬT CÔNG TƠ SAU KHI DUYỆT ĐƠN
+# ROUTER QUẢN LÝ CHỈ SỐ CÔNG TƠ
 # ============================================================
 
-@router.put(
-    "/{meter_id}",
+reading_router = APIRouter(
+    prefix="/meter-readings",
+    tags=["Meter Reading"]
+)
+
+
+# ============================================================
+# 3. LẤY DANH SÁCH CHỈ SỐ CÔNG TƠ
+# Admin: tất cả
+# Nhân viên: tất cả
+# Khách hàng: chỉ số của mình
+# ============================================================
+
+@reading_router.get(
+    "/",
     dependencies=[
-        Depends(require_roles("Admin"))
+        Depends(require_roles("Admin", "NhanVien", "KhachHang"))
     ]
 )
-def update_meter(
-    meter_id: int,
-    data: MeterUpdate,
-    db: Session = Depends(get_db)
+def api_get_meter_readings(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    meter_id: int = None,
+    reading_period: str = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    try:
-
-        update_meter_after_approval_service(
-            db=db,
-            meter_id=meter_id,
-            serial_number=data.serial_number,
-            meter_type=data.meter_type,
-            installation_date=data.installation_date,
-            initial_reading=data.initial_reading,
-            status=data.status
-        )
-
-        return {
-            "message": "Cập nhật công tơ thành công"
-        }
-
-    except Exception as e:
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    return get_meter_readings(
+        db=db,
+        current_user=current_user,
+        page=page,
+        page_size=page_size,
+        meter_id=meter_id,
+        reading_period=reading_period
+    )
 
 
 # ============================================================
-# 4. KHÁCH HÀNG - XEM CÔNG TƠ CỦA MÌNH
+# 4. LẤY CHI TIẾT CHỈ SỐ CÔNG TƠ
 # ============================================================
 
-@router.get(
-    "/my/list",
+@reading_router.get(
+    "/{reading_id}",
     dependencies=[
-        Depends(require_roles("KhachHang"))
+        Depends(require_roles("Admin", "NhanVien", "KhachHang"))
     ]
 )
-def get_my_meters(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+def api_get_meter_reading_detail(
+    reading_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    try:
+    return get_meter_reading_detail(
+        db=db,
+        current_user=current_user,
+        reading_id=reading_id
+    )
 
-        # Lấy customer_id từ user đăng nhập
-        customer_id = current_user.customer_id
 
-        result = get_my_meters_service(
-            db=db,
-            customer_id=customer_id
-        )
+# ============================================================
+# 5. GHI NHẬN CHỈ SỐ CÔNG TƠ
+# Chỉ nhân viên được thực hiện
+# ============================================================
 
-        return {
-            "data": result
-        }
-
-    except Exception as e:
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+@reading_router.post(
+    "/",
+    response_model=MeterReadingResponse,
+    dependencies=[Depends(require_roles("NhanVien"))]
+)
+def api_record_meter_reading(
+    data: MeterReadingCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return record_meter_reading(
+        db=db,
+        current_user=current_user,
+        data=data
+    )

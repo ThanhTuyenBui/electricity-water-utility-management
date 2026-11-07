@@ -1,82 +1,50 @@
-from datetime import date, datetime
-from decimal import Decimal
-
 from pydantic import BaseModel, Field
+from datetime import date
+from decimal import Decimal
+from typing import Optional
 
 
 # ============================================================
-# ADMIN - TÌM KIẾM / PHÂN TRANG CÔNG TƠ
+# SCHEMA: GHI NHẬN CHỈ SỐ CÔNG TƠ
 # ============================================================
 
-class MeterSearchParams(BaseModel):
-    search_area: str | None = None
-    search_customer: str | None = None
-    search_meter: str | None = None
-    page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=10, ge=1, le=100)
+class MeterReadingCreate(BaseModel):
 
+    meter_id: int = Field(
+        ...,
+        gt=0,
+        description="ID công tơ"
+    )
 
-# ============================================================
-# ADMIN - CẬP NHẬT CÔNG TƠ
-# ============================================================
+    reading_period: str = Field(
+        ...,
+        min_length=7,
+        max_length=7,
+        description="Kỳ ghi nhận theo định dạng YYYY-MM"
+    )
 
-class MeterUpdate(BaseModel):
-    serial_number: str
-    meter_type: str
-    installation_date: date
-    initial_reading: Decimal = Field(ge=0)
-    status: str | None = None
+    current_reading: Decimal = Field(
+        ...,
+        ge=0,
+        description="Chỉ số hiện tại"
+    )
 
+    reading_date: date = Field(
+        ...,
+        description="Ngày ghi nhận"
+    )
 
-# ============================================================
-# RESPONSE - DANH SÁCH CÔNG TƠ
-# ============================================================
+    image_url: Optional[str] = Field(
+        default=None,
+        description="Đường dẫn ảnh công tơ"
+    )
 
-class MeterListResponse(BaseModel):
-    meter_name: str
-    area: str | None
-    customer_name: str
+    abnormal_reason: Optional[str] = Field(
+        default=None,
+        description="Lý do nếu chỉ số bất thường"
+    )
+    
+class MeterReadingResponse(BaseModel):
+    message: str
 
-
-# ============================================================
-# RESPONSE - CHI TIẾT CÔNG TƠ
-# ============================================================
-
-class MeterDetailResponse(BaseModel):
-    meter_id: int
-    serial_number: str
-    meter_type: str
-    installation_date: date
-    initial_reading: Decimal
-    status: str
-    created_at: datetime
-    updated_at: datetime
-
-    customer_service_id: int
-    customer_id: int
-    service_id: int
-    installation_address: str
-
-    customer_name: str
-    customer_phone: str | None
-    customer_identity_number: str | None
-
-
-# ============================================================
-# RESPONSE - CÔNG TƠ CỦA KHÁCH HÀNG
-# ============================================================
-
-class MyMeterResponse(BaseModel):
-    meter_id: int
-    serial_number: str
-    meter_type: str
-    installation_date: date
-    initial_reading: Decimal
-    status: str
-    created_at: datetime
-    updated_at: datetime
-
-    customer_service_id: int
-    service_id: int
-    service_name: str
-    installation_address: str
+    data: dict
