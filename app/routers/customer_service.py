@@ -6,7 +6,7 @@ from fastapi import (
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
+from app.core.error_handler import handle_database_error
 from app.core.dependencies import (
     get_db,
     get_current_user,
@@ -164,9 +164,9 @@ def additional_service(
 # 4. DUYỆT TẤT CẢ DỊCH VỤ ĐANG CHỜ CỦA KHÁCH HÀNG
 # =========================================================
 
+
 @router.put(
     "/customers/{customer_id}/approve",
-    response_model=CustomerServiceActionResponse,
     dependencies=[Depends(require_roles("NhanVien", "Admin"))]
 )
 def approve_customer_services(
@@ -182,15 +182,13 @@ def approve_customer_services(
         )
 
         return {
-            "message": "Đã phê duyệt tất cả dịch vụ đang chờ của khách hàng",
-            "user_id": None
+            "message": "Đã phê duyệt tất cả dịch vụ đang chờ của khách hàng"
+            
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        handle_database_error(db, e)
+
 
 
 # =========================================================

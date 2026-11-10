@@ -195,12 +195,45 @@ def record_meter_reading(
     except Exception:
         db.rollback()
         raise
+# cập nhật sau khi lắp
+def update_meter_after_approval(
+    db: Session,
+    meter_id: int,
+    serial_number: str,
+    meter_type: str,
+    installation_date,
+    initial_reading: int
+):
+    sql = text("""
+        CALL public.update_meter_after_approval(
+            :p_meter_id,
+            :p_serial_number,
+            :p_meter_type,
+            :p_installation_date,
+            :p_initial_reading,
+            :p_status
+        )
+    """)
 
+    db.execute(sql, {
+        "p_meter_id": meter_id,
+        "p_serial_number": serial_number,
+        "p_meter_type": meter_type,
+        "p_installation_date": installation_date,
+        "p_initial_reading": initial_reading,
+        "p_status": "ACTIVE"
+    })
 
+    db.commit()
+
+    return {
+        "meter_id": meter_id,
+        "serial_number": serial_number,
+        "meter_type": meter_type,
+        "installation_date": installation_date,
+        "initial_reading": initial_reading,
+        "status": "ACTIVE"
+    }
         
 
-        return dict(row) if row else None
-
-    except Exception:
-        db.rollback()
-        raise
+     

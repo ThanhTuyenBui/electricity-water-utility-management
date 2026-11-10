@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
-
+from app.services.audit_log import set_audit_context
 from app.repositories import meter as meter_repo
 
 
@@ -289,6 +289,64 @@ def record_meter_reading(
 
         return {
             "message": message,
+            "data": result
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except SQLAlchemyError as exc:
+        handle_meter_database_error(db, exc)
+
+    except Exception:
+        db.rollback()
+        raise
+
+# ============================================================
+# 6. CẬP NHẬT THÔNG TIN LẮP ĐẶT CÔNG TƠ
+# ============================================================
+
+def install_meter(
+    db,
+    current_user,
+    meter_id: int,
+    data,
+    ip_address: str = None
+):
+    try:
+        employee_id = meter_repo.get_employee_id_by_user_id(
+            db, current_user.user_id
+        )
+
+        if employee_id is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Tài khoản không có thông tin nhân viên"
+            )
+
+        # Thiết lập thông tin Audit Log
+        set_audit_context(
+            db=db,
+            current_user=current_user,
+            ip_address=ip_address
+        )
+
+        # 2. Cập nhật thông tin lắp đặt công tơ
+        result = meter_repo.update_meter_after_approval(
+            db=db,
+            meter_id=meter_id,
+            serial_number=data.serial_number,
+            meter_type=data.meter_type,
+            installation_date=data.installation_date,
+            initial_reading=data.initial_reading
+        )
+
+        # 3. Commit transaction
+        db.commit()
+
+        return {
+            "message": "Lắp đặt công tơ thành công",
             "data": result
         }
 

@@ -3,11 +3,12 @@ from fastapi import (
     Depends,
     HTTPException,
     status,
-    Query
+    Query,
+    Request
 )
 
 from sqlalchemy.orm import Session
-
+ 
 from app.core.dependencies import (
     get_db,
     get_current_user,
@@ -18,7 +19,7 @@ from app.models.user import User
 
 from app.schemas.meter import (
     MeterReadingCreate,
-    MeterReadingResponse
+    MeterInstallRequest
 )
 
 from app.services.meter import (
@@ -26,7 +27,8 @@ from app.services.meter import (
     get_meter_detail,
     get_meter_readings,
     get_meter_reading_detail,
-    record_meter_reading
+    record_meter_reading,
+    install_meter
 )
 
 
@@ -38,6 +40,30 @@ router = APIRouter(
     prefix="/meters",
     tags=["Meters"]
 )
+
+# ============================================================
+# 1. CẬP NHẬT THÔNG TIN LẮP ĐẶT CÔNG TƠ
+# Chỉ Admin và Nhân viên được thực hiện
+# ============================================================
+
+@router.put(
+    "/{meter_id}/install",
+    dependencies=[
+        Depends(require_roles("Admin", "NhanVien"))
+    ]
+)
+def api_install_meter(
+    meter_id: int,
+    data: MeterInstallRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return install_meter(
+        db=db,
+        current_user=current_user,
+        meter_id=meter_id,
+        data=data
+    )
 
 
 # ============================================================
@@ -97,7 +123,7 @@ def api_get_meter_detail(
 
 reading_router = APIRouter(
     prefix="/meter-readings",
-    tags=["Meter Reading"]
+    tags=["Meter Readings"]
 )
 
 
@@ -159,18 +185,29 @@ def api_get_meter_reading_detail(
 # Chỉ nhân viên được thực hiện
 # ============================================================
 
+
+# ============================================================
+# 5. GHI NHẬN CHỈ SỐ CÔNG TƠ
+# Chỉ nhân viên được thực hiện
+# ============================================================
+
 @reading_router.post(
     "/",
-    response_model=MeterReadingResponse,
     dependencies=[Depends(require_roles("NhanVien"))]
 )
 def api_record_meter_reading(
     data: MeterReadingCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return record_meter_reading(
+    result = record_meter_reading(
         db=db,
         current_user=current_user,
-        data=data
+        data=data,
+        ip_address=request.client.host if request.client else None
     )
+
+    return {
+        "message": "Ghi nhận chỉ số thành công"
+    }

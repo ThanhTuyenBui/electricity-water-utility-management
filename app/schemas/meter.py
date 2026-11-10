@@ -43,7 +43,30 @@ class MeterReadingCreate(BaseModel):
         default=None,
         description="Lý do nếu chỉ số bất thường"
     )
-    
+
+
+#cấp nhật sau khi lắp
+class MeterInstallRequest(BaseModel):
+    serial_number: str = Field(
+        ...,
+        min_length=1,
+        description="Số seri công tơ"
+    )
+
+    meter_type: str = Field(
+        ...,
+        min_length=1,
+        description="Loại công tơ"
+    )
+
+    installation_date: date
+
+    initial_reading: int = Field(
+        ...,
+        ge=0,
+        description="Chỉ số ban đầu của công tơ"
+    )
+
 class MeterReadingResponse(BaseModel):
     message: str
 

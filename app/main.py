@@ -11,6 +11,10 @@ from app.routers import customer_service
 from app.routers import meter
 from app.routers import tariff
 from app.routers import bill
+from app.routers import notification
+from app.routers import debt_management
+from app.routers import report
+from app.routers import payment
 import uvicorn
 from app.core.config import settings
 
@@ -23,6 +27,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Electric Water Management API",
     version="1.0.0",
+    redirect_slashes=True,
     lifespan=lifespan
 )
 
@@ -80,12 +85,35 @@ app.include_router(
     tags=["Bill Management"]
 )
 
+app.include_router(
+    notification.router,
+    prefix="/api/notifications",
+    tags=["Notifications"]
+)
 
-@app.get("/")
-def root():
-    return {
-        "message": "Electric Water Management API is running"
-    }
+app.include_router(
+    notification.customer_router,
+    prefix="/api/customer",
+    tags=["Customer Notifications"]
+)
+
+app.include_router(
+    debt_management.router,
+    prefix="/api/debt-management",
+    tags=["Debt Management"]
+)
+
+app.include_router(
+    payment.router,
+    prefix="/api/payments",
+    tags=["Payment Management"]
+)
+
+app.include_router(
+    report.router,
+    prefix="/api/reports",
+    tags=["Reports"]
+)
 
 
 if __name__ == "__main__":
