@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
-from app.services.audit_log import set_audit_context
+
 from app.repositories import meter as meter_repo
 
 
@@ -244,8 +244,7 @@ def record_meter_reading(
     current_reading,
     reading_date,
     image_url: str,
-    abnormal_reason: str = None,
-    ip_address: str = None
+    abnormal_reason: str = None
 ):
     try:
         # 1. Xác định nhân viên đang đăng nhập
@@ -260,12 +259,7 @@ def record_meter_reading(
                 detail="Tài khoản không có thông tin nhân viên"
             )
 
-        # 2. Thiết lập Audit Log
-        set_audit_context(
-            db=db,
-            current_user=current_user,
-            ip_address=ip_address
-        )
+      
 
         # 3. Ghi chỉ số và xử lý hóa đơn
         result = meter_repo.record_meter_reading(
@@ -323,8 +317,7 @@ def install_meter(
     db,
     current_user,
     meter_id: int,
-    data,
-    ip_address: str = None
+    data
 ):
     try:
         employee_id = meter_repo.get_employee_id_by_user_id(
@@ -337,13 +330,7 @@ def install_meter(
                 detail="Tài khoản không có thông tin nhân viên"
             )
 
-        # Thiết lập thông tin Audit Log
-        set_audit_context(
-            db=db,
-            current_user=current_user,
-            ip_address=ip_address
-        )
-
+       
         # 2. Cập nhật thông tin lắp đặt công tơ
         result = meter_repo.update_meter_after_approval(
             db=db,

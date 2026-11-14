@@ -2,9 +2,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
-    status,
     Query,
-    Request,
     UploadFile, File, Form
 )
 from datetime import date
@@ -188,11 +186,6 @@ def api_get_meter_reading_detail(
     )
 
 
-# ============================================================
-# 5. GHI NHẬN CHỈ SỐ CÔNG TƠ
-# Chỉ nhân viên được thực hiện
-# ============================================================
-
 
 # ============================================================
 # 5. GHI NHẬN CHỈ SỐ CÔNG TƠ
@@ -211,8 +204,6 @@ async def api_record_meter_reading(
     reading_date: date = Form(...),
     image: UploadFile = File(...),
     abnormal_reason: str = Form(None),
-
-    request: Request = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -279,8 +270,7 @@ async def api_record_meter_reading(
             current_reading=current_reading,
             reading_date=reading_date,
             image_url=image_url,
-            abnormal_reason=abnormal_reason,
-            ip_address=request.client.host if request.client else None
+            abnormal_reason=abnormal_reason
         )
 
         return result

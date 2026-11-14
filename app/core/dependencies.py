@@ -8,7 +8,6 @@ import jwt
 
 from types import SimpleNamespace
 
-from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from sqlalchemy.orm import Session
@@ -16,7 +15,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-
+from fastapi import Depends, HTTPException, status, Request
 
 # ============================================================
 # 1. XÁC THỰC JWT
@@ -49,13 +48,16 @@ def get_db():
 # 3. LẤY THÔNG TIN USER ĐANG ĐĂNG NHẬP
 # ============================================================
 
+
+
 def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ):
     """
-    Giải mã JWT và lấy thông tin user bằng SQL thuần.
-    Chỉ tài khoản ACTIVE mới được sử dụng hệ thống.
+    Giải mã JWT, kiểm tra tài khoản ACTIVE
+    và thiết lập Audit Context cho request.
     """
 
     credentials_exception = HTTPException(
@@ -67,14 +69,12 @@ def get_current_user(
     )
 
     try:
-        # Giải mã JWT
         payload = jwt.decode(
             token,
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM]
         )
 
-        # Lấy user_id từ trường sub
         user_id = payload.get("sub")
 
         if user_id is None:
@@ -85,7 +85,7 @@ def get_current_user(
     except (jwt.InvalidTokenError, ValueError, TypeError):
         raise credentials_exception
 
-    # Truy vấn user và role bằng SQL thuần
+    # Truy vấn user và role
     query = text("""
         SELECT
             u.user_id,
@@ -103,19 +103,32 @@ def get_current_user(
         {"user_id": user_id}
     ).mappings().first()
 
-    # Không tìm thấy tài khoản
     if user is None:
         raise credentials_exception
 
-    # Kiểm tra trạng thái tài khoản
     if user["status"] != "ACTIVE":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tài khoản không hoạt động"
         )
 
-    # Chuyển kết quả SQL thành object thông thường
-    # Không phải SQLAlchemy ORM Model
+    # Lưu user_id vào SQLAlchemy Session
+    db.info["audit_user_id"] = user["user_id"]
+
+    # Thiết lập Audit Context trong transaction hiện tại
+    db.execute(
+        text("""
+            SELECT set_config(
+                'app.user_id',
+                :user_id,
+                true
+            )
+        """),
+        {
+            "user_id": str(user["user_id"])
+        }
+    )
+
     current_user = SimpleNamespace(
         user_id=user["user_id"],
         role_id=user["role_id"],
@@ -124,6 +137,7 @@ def get_current_user(
     )
 
     return current_user
+
 
 
 # ============================================================
