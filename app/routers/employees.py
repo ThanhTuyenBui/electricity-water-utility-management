@@ -13,7 +13,6 @@ from app.core.dependencies import (
     require_roles
 )
 
-from app.models.user import User
 
 from app.schemas.employee import (
     EmployeeCreate,
@@ -48,7 +47,7 @@ router = APIRouter()
 def create_employee(
     data: EmployeeCreate,
 
-    current_user: User = Depends(
+    current_user = Depends(
         require_roles("Admin")
     ),
 
@@ -109,7 +108,7 @@ def get_employees(
         le=100
     ),
 
-    current_user: User = Depends(
+    current_user = Depends(
         require_roles("Admin")
     ),
 
@@ -180,7 +179,7 @@ def get_employees(
     response_model=EmployeeResponse
 )
 def get_my_employee(
-    current_user: User = Depends(
+    current_user = Depends(
         require_roles("Admin", "NhanVien")
     ),
 
@@ -216,7 +215,7 @@ def get_my_employee(
 def update_my_employee(
     data: EmployeeSelfUpdate,
 
-    current_user: User = Depends(
+    current_user = Depends(
         require_roles("Admin", "NhanVien")
     ),
 
@@ -286,7 +285,7 @@ def update_my_employee(
 def get_employee(
     employee_id: int,
 
-    current_user: User = Depends(
+    current_user = Depends(
         require_roles("Admin")
     ),
 
@@ -324,7 +323,7 @@ def update_employee(
 
     data: EmployeeUpdate,
 
-    current_user: User = Depends(
+    current_user = Depends(
         require_roles("Admin")
     ),
 
@@ -396,7 +395,7 @@ def change_employee_status(
 
     data: EmployeeStatusUpdate,
 
-    current_user: User = Depends(
+    current_user = Depends(
         require_roles("Admin")
     ),
 

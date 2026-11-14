@@ -2,8 +2,9 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from contextlib import asynccontextmanager
 from app.scheduler.notification_scheduler import start_scheduler, stop_scheduler
-from app.database.database import engine
-
+from app.core.database import engine
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 from app.routers import auth
 from app.routers import employees
 from app.routers import customer
@@ -17,7 +18,7 @@ from app.routers import report
 from app.routers import payment
 import uvicorn
 from app.core.config import settings
-
+from app.routers.ai import router as ai_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_scheduler()
@@ -31,7 +32,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Thư mục gốc project
+BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Thư mục chứa ảnh
+MEDIA_DIR = BASE_DIR / "media"
+
+MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+
+# Phục vụ ảnh qua URL /media/...
+app.mount(
+    "/media",
+    StaticFiles(directory=str(MEDIA_DIR)),
+    name="media"
+)
 app.include_router(
     auth.router,
     prefix="/api/auth",
@@ -114,7 +128,7 @@ app.include_router(
     prefix="/api/reports",
     tags=["Reports"]
 )
-
+app.include_router(ai_router, prefix="/api")
 
 if __name__ == "__main__":
     uvicorn.run(

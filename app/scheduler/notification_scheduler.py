@@ -4,7 +4,7 @@ from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import text
 from zoneinfo import ZoneInfo
 
-from app.database.database import SessionLocal
+from app.core.database import SessionLocal
 
 
 # Múi giờ Việt Nam

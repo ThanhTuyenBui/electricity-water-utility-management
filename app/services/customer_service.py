@@ -11,8 +11,10 @@ from app.repositories.customer_service import (
     register_customer_at_counter as register_customer_at_counter_repo,
     register_additional_service as register_additional_service_repo,
     get_pending_customer_service_detail as get_pending_customer_service_detail_repo,
+    get_customer_id_by_user_id as get_customer_id_by_user_id_repo,
+    create_account_notification as create_account_notification_repo,
 
-get_pending_stop_customer_service_detail as get_pending_stop_customer_service_detail_repo,
+    get_pending_stop_customer_service_detail as get_pending_stop_customer_service_detail_repo,
 
 )
 
@@ -127,36 +129,59 @@ def register_customer_at_counter(
 ):
     temporary_password = generate_temporary_password()
 
-    password_hash = hash_password(
-        temporary_password
+    password_hash = hash_password(temporary_password)
+
+    # 1. Tạo tài khoản khách hàng
+    user_id = register_customer_at_counter_repo(
+        db=db,
+        username=username,
+        password_hash=password_hash,
+        email=email,
+        full_name=full_name,
+        service_ids=service_ids,
+        employee_user_id=employee_user_id,
+        phone=phone,
+        identity_number=identity_number,
+        address=address
     )
 
-    try:
-        user_id = register_customer_at_counter_repo(
-            db=db,
-            username=username,
-            password_hash=password_hash,
-            email=email,
-            full_name=full_name,
-            service_ids=service_ids,
-            employee_user_id=employee_user_id,
-            phone=phone,
-            identity_number=identity_number,
-            address=address
-        )
+    # 2. Lấy customer_id
+    customer_id = get_customer_id_by_user_id_repo(
+        db=db,
+        user_id=user_id
+    )
 
-        if phone:
+    # 3. Gửi SMS và lưu lịch sử
+    if phone:
+        status = "SIMULATED"
+        error_message = None
+
+        try:
             SMSService().send_customer_password(
                 phone_number=phone,
                 username=username,
                 password=temporary_password
             )
 
-        return user_id
+        except Exception as e:
+            status = "FAILED"
+            error_message = str(e)
 
-    except Exception:
-        db.rollback()
-        raise
+        # 4. Lưu lịch sử SMS vào notifications
+        try:
+            create_account_notification_repo(
+                db=db,
+                customer_id=customer_id,
+                phone_number=phone,
+                status=status,
+                error_message=error_message
+            )
+        except Exception:
+            db.rollback()
+            raise
+
+    return user_id
+
 def register_additional_service(
     db: Session,
     customer_id: int,

@@ -2,7 +2,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db, require_roles
+from app.core.dependencies import get_db, get_current_user, require_roles
+from app.repositories import customer as customer_repository
 from app.services import notification as notification_service
 
 from app.schemas.notification import (
@@ -13,6 +14,10 @@ from app.schemas.notification import (
 )
 
 
+# =====================================================
+# KHAI BÁO ROUTER
+# =====================================================
+
 # Router quản trị thông báo
 router = APIRouter()
 
@@ -21,9 +26,12 @@ customer_router = APIRouter()
 
 
 # =====================================================
+# I. API QUẢN TRỊ THÔNG BÁO
+# =====================================================
+
+
 # 1. LẤY DANH SÁCH THÔNG BÁO
 # GET /api/notifications
-# =====================================================
 
 @router.get(
     "",
@@ -57,10 +65,39 @@ def get_notifications_api(
         )
 
 
-# =====================================================
-# 2. LẤY CHI TIẾT THÔNG BÁO
+# 2. LẤY DANH SÁCH THÔNG BÁO THẤT BẠI
+# GET /api/notifications/failed
+
+@router.get(
+    "/failed",
+    response_model=FailedNotificationListResponse,
+    dependencies=[Depends(require_roles("Admin", "NhanVien"))]
+)
+def get_failed_notifications_api(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    try:
+        return notification_service.get_failed_notifications(
+            db=db,
+            page=page,
+            page_size=page_size
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+# 3. LẤY CHI TIẾT THÔNG BÁO
 # GET /api/notifications/{notification_id}
-# =====================================================
 
 @router.get(
     "/{notification_id}",
@@ -88,10 +125,8 @@ def get_notification_by_id_api(
         )
 
 
-# =====================================================
-# 3. GỬI LẠI THÔNG BÁO THẤT BẠI
+# 4. GỬI LẠI THÔNG BÁO THẤT BẠI
 # POST /api/notifications/{notification_id}/retry
-# =====================================================
 
 @router.post(
     "/{notification_id}/retry",
@@ -134,43 +169,12 @@ def retry_notification_api(
 
 
 # =====================================================
-# 4. LẤY DANH SÁCH THÔNG BÁO THẤT BẠI
-# GET /api/notifications/failed
+# II. API THÔNG BÁO DÀNH CHO KHÁCH HÀNG
 # =====================================================
 
-@router.get(
-    "/failed",
-    response_model=FailedNotificationListResponse,
-    dependencies=[Depends(require_roles("Admin", "NhanVien"))]
-)
-def get_failed_notifications_api(
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    db: Session = Depends(get_db)
-):
-    try:
-        return notification_service.get_failed_notifications(
-            db=db,
-            page=page,
-            page_size=page_size
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-from app.core.dependencies import get_current_user
-from app.repositories import customer as customer_repository
 
-# =====================================================
 # 5. KHÁCH HÀNG LẤY DANH SÁCH THÔNG BÁO
 # GET /api/customer/notifications
-# =====================================================
 
 @customer_router.get(
     "/notifications",
@@ -183,7 +187,6 @@ def get_customer_notifications_api(
     db: Session = Depends(get_db)
 ):
     try:
-        # Lấy thông tin khách hàng từ user_id trong JWT
         customer = customer_repository.get_my_customer(
             db=db,
             user_id=current_user.user_id
@@ -216,100 +219,8 @@ def get_customer_notifications_api(
         )
 
 
-# =====================================================
-# 6. KHÁCH HÀNG XEM CHI TIẾT THÔNG BÁO
-# GET /api/customer/notifications/{notification_id}
-# =====================================================
-
-@customer_router.get(
-    "/notifications/{notification_id}",
-    dependencies=[Depends(require_roles("KhachHang"))]
-)
-def get_customer_notification_detail_api(
-    notification_id: int,
-    current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    try:
-        customer = customer_repository.get_my_customer(
-            db=db,
-            user_id=current_user.user_id
-        )
-
-        if customer is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Không tìm thấy thông tin khách hàng"
-            )
-
-        return notification_service.get_customer_notification_detail(
-            db=db,
-            notification_id=notification_id,
-            customer_id=customer["customer_id"]
-        )
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Không thể lấy chi tiết thông báo"
-        )
-
-# =====================================================
-# 7. KHÁCH HÀNG ĐÁNH DẤU THÔNG BÁO ĐÃ ĐỌC
-# PATCH /api/customer/notifications/{notification_id}/read
-# =====================================================
-
-@customer_router.patch(
-    "/notifications/{notification_id}/read",
-    dependencies=[Depends(require_roles("KhachHang"))]
-)
-def mark_customer_notification_as_read_api(
-    notification_id: int,
-    current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    try:
-        customer = customer_repository.get_my_customer(
-            db=db,
-            user_id=current_user.user_id
-        )
-
-        if customer is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Không tìm thấy thông tin khách hàng"
-            )
-
-        return notification_service.mark_notification_as_read(
-            db=db,
-            notification_id=notification_id,
-            customer_id=customer["customer_id"]
-        )
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Không thể đánh dấu thông báo đã đọc"
-        )
-
-# =====================================================
-# 8. KHÁCH HÀNG ĐẾM SỐ THÔNG BÁO CHƯA ĐỌC
+# 6. KHÁCH HÀNG ĐẾM SỐ THÔNG BÁO CHƯA ĐỌC
 # GET /api/customer/notifications/unread-count
-# =====================================================
 
 @customer_router.get(
     "/notifications/unread-count",
@@ -353,3 +264,90 @@ def count_customer_unread_notifications_api(
             detail="Không thể đếm thông báo chưa đọc"
         )
 
+
+# 7. KHÁCH HÀNG XEM CHI TIẾT THÔNG BÁO
+# GET /api/customer/notifications/{notification_id}
+
+@customer_router.get(
+    "/notifications/{notification_id}",
+    dependencies=[Depends(require_roles("KhachHang"))]
+)
+def get_customer_notification_detail_api(
+    notification_id: int,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        customer = customer_repository.get_my_customer(
+            db=db,
+            user_id=current_user.user_id
+        )
+
+        if customer is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Không tìm thấy thông tin khách hàng"
+            )
+
+        return notification_service.get_customer_notification_detail(
+            db=db,
+            notification_id=notification_id,
+            customer_id=customer["customer_id"]
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Không thể lấy chi tiết thông báo"
+        )
+
+
+# 8. KHÁCH HÀNG ĐÁNH DẤU THÔNG BÁO ĐÃ ĐỌC
+# PATCH /api/customer/notifications/{notification_id}/read
+
+@customer_router.patch(
+    "/notifications/{notification_id}/read",
+    dependencies=[Depends(require_roles("KhachHang"))]
+)
+def mark_customer_notification_as_read_api(
+    notification_id: int,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        customer = customer_repository.get_my_customer(
+            db=db,
+            user_id=current_user.user_id
+        )
+
+        if customer is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Không tìm thấy thông tin khách hàng"
+            )
+
+        return notification_service.mark_notification_as_read(
+            db=db,
+            notification_id=notification_id,
+            customer_id=customer["customer_id"]
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Không thể đánh dấu thông báo đã đọc"
+        )

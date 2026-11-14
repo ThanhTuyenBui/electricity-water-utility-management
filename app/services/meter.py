@@ -235,10 +235,17 @@ def get_meter_reading_detail(
 # ============================================================
 
 
+
 def record_meter_reading(
     db,
     current_user,
-    data
+    meter_id: int,
+    reading_period: str,
+    current_reading,
+    reading_date,
+    image_url: str,
+    abnormal_reason: str = None,
+    ip_address: str = None
 ):
     try:
         # 1. Xác định nhân viên đang đăng nhập
@@ -253,16 +260,23 @@ def record_meter_reading(
                 detail="Tài khoản không có thông tin nhân viên"
             )
 
-        # 2. Ghi chỉ số và tự động xử lý hóa đơn
+        # 2. Thiết lập Audit Log
+        set_audit_context(
+            db=db,
+            current_user=current_user,
+            ip_address=ip_address
+        )
+
+        # 3. Ghi chỉ số và xử lý hóa đơn
         result = meter_repo.record_meter_reading(
             db=db,
-            meter_id=data.meter_id,
+            meter_id=meter_id,
             reader_id=reader_id,
-            reading_period=data.reading_period,
-            current_reading=data.current_reading,
-            reading_date=data.reading_date,
-            image_url=data.image_url,
-            abnormal_reason=data.abnormal_reason
+            reading_period=reading_period,
+            current_reading=current_reading,
+            reading_date=reading_date,
+            image_url=image_url,
+            abnormal_reason=abnormal_reason
         )
 
         if not result:
@@ -271,12 +285,9 @@ def record_meter_reading(
                 detail="Không thể ghi nhận chỉ số công tơ"
             )
 
-        # 3. Xác định thông báo theo trạng thái hóa đơn
+        # 4. Xác định thông báo
         if result["readings_complete"]:
-            message = (
-                "Ghi nhận chỉ số thành công và "
-                "đã tự động tính tiền hóa đơn"
-            )
+            message = "Ghi nhận chỉ số thành công"
         else:
             message = (
                 "Ghi nhận chỉ số thành công. "
@@ -284,7 +295,7 @@ def record_meter_reading(
                 "các công tơ còn lại"
             )
 
-        # 4. Commit transaction
+        # 5. Commit
         db.commit()
 
         return {
@@ -302,6 +313,7 @@ def record_meter_reading(
     except Exception:
         db.rollback()
         raise
+
 
 # ============================================================
 # 6. CẬP NHẬT THÔNG TIN LẮP ĐẶT CÔNG TƠ

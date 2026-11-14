@@ -1,6 +1,7 @@
 
 from pathlib import Path
 from html import escape
+from decimal import Decimal, InvalidOperation
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
@@ -18,7 +19,10 @@ from reportlab.platypus import (
 )
 
 
-# Đường dẫn font Arial hỗ trợ tiếng Việt
+# =====================================================
+# 1. FONT TIẾNG VIỆT
+# =====================================================
+
 FONT_PATH = (
     Path(__file__).resolve().parents[1]
     / "static"
@@ -33,27 +37,126 @@ if "Arial" not in pdfmetrics.getRegisteredFontNames():
     pdfmetrics.registerFont(TTFont("Arial", str(FONT_PATH)))
 
 
+# =====================================================
+# 2. HÀM HỖ TRỢ
+# =====================================================
+
 def format_money(value):
     """Định dạng tiền Việt Nam."""
     return f"{float(value or 0):,.0f}".replace(",", ".") + " VNĐ"
 
 
+def format_number(value):
+    """Định dạng số."""
+    return f"{float(value or 0):,.0f}".replace(",", ".")
+
+
 def safe_text(value):
-    """Tránh lỗi khi dữ liệu chứa ký tự đặc biệt của HTML."""
+    """Escape nội dung HTML trong Paragraph."""
     return escape(str(value if value is not None else ""))
 
 
+def format_date(value):
+    """Định dạng ngày tháng."""
+    if value is None:
+        return ""
+
+    if hasattr(value, "strftime"):
+        return value.strftime("%d/%m/%Y")
+
+    return str(value)
+
+
+def decimal_value(value):
+    """Chuyển giá trị về Decimal để so sánh VAT chính xác."""
+    try:
+        return Decimal(str(value or 0))
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0")
+
+
+def make_info_paragraph(label, value, style):
+    """Tạo dòng thông tin dạng Nhãn: Giá trị."""
+    return Paragraph(
+        f"<b>{safe_text(label)}:</b> {safe_text(value)}",
+        style
+    )
+
+
+def make_split_summary(split, styles):
+    """Tạo bảng tổng kết biểu giá, tất cả nội dung căn phải."""
+
+    right_style = ParagraphStyle(
+        name="SplitSummaryRight",
+        fontName="Arial",
+        fontSize=12,
+        leading=17,
+        alignment=TA_RIGHT,
+    )
+
+    data = [
+        [
+            Paragraph("<b>Tiền tiêu thụ</b>", right_style),
+            Paragraph(
+                f"<b>{format_money(split.get('subtotal'))}</b>",
+                right_style,
+            ),
+        ],
+        [
+            Paragraph(
+                f"Phí môi trường ({format_number(split.get('environment_fee_percent'))}%)",
+                right_style,
+            ),
+            Paragraph(format_money(split.get("fee_amount")), right_style),
+        ],
+        [
+            Paragraph(
+                f"VAT ({format_number(split.get('vat_percent'))}%)",
+                right_style,
+            ),
+            Paragraph(format_money(split.get("tax_amount")), right_style),
+        ],
+        [
+            Paragraph("<b>Tổng biểu giá</b>", right_style),
+            Paragraph(
+                f"<b>{format_money(split.get('total_amount'))}</b>",
+                right_style,
+            ),
+        ],
+    ]
+
+    table = Table(
+        data,
+        colWidths=[130 * mm, 40 * mm],
+        hAlign="LEFT",
+    )
+
+    table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "Arial"),
+        ("FONTSIZE", (0, 0), (-1, -1), 12),
+
+        # Căn phải tất cả nội dung trong tất cả các ô
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+
+        ("LINEABOVE", (0, 0), (-1, 0), 0.5, colors.grey),
+        ("LINEBELOW", (0, -1), (-1, -1), 0.5, colors.grey),
+    ]))
+
+    return table
+
+# =====================================================
+# 3. TẠO PDF HÓA ĐƠN
+# =====================================================
+
 def generate_invoice_pdf(invoice: dict, output_path: str) -> str:
-    """
-    Tạo hóa đơn PDF điện/nước.
-
-    Parameters:
-        invoice: Dictionary chứa thông tin hóa đơn.
-        output_path: Đường dẫn lưu file PDF.
-
-    Returns:
-        Đường dẫn file PDF đã tạo.
-    """
 
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -63,219 +166,377 @@ def generate_invoice_pdf(invoice: dict, output_path: str) -> str:
         pagesize=A4,
         rightMargin=20 * mm,
         leftMargin=20 * mm,
-        topMargin=15 * mm,
+        topMargin=12 * mm,
         bottomMargin=15 * mm,
+        title=f"Hoa don {invoice.get('bill_code', '')}",
     )
 
     styles = getSampleStyleSheet()
 
+    # -------------------------------------------------
+    # STYLE
+    # -------------------------------------------------
+
     styles.add(ParagraphStyle(
-        name="InvoiceTitle",
+        name="CompanyTitle",
         fontName="Arial",
-        fontSize=18,
-        leading=24,
+        fontSize=20,
+        leading=26,
         alignment=TA_CENTER,
-        spaceAfter=8,
+        spaceAfter=10,
     ))
 
     styles.add(ParagraphStyle(
-        name="SectionTitle",
+        name="InvoiceTitle",
         fontName="Arial",
-        fontSize=11,
-        leading=16,
-        spaceBefore=8,
-        spaceAfter=6,
+        fontSize=24,
+        leading=30,
+        alignment=TA_CENTER,
+        spaceAfter=10,
     ))
 
     styles.add(ParagraphStyle(
         name="NormalVietnamese",
         fontName="Arial",
-        fontSize=9,
-        leading=14,
+        fontSize=14,
+        leading=21,
+        alignment=TA_LEFT,
     ))
 
     styles.add(ParagraphStyle(
         name="CenterVietnamese",
         fontName="Arial",
-        fontSize=9,
-        leading=14,
+        fontSize=14,
+        leading=20,
         alignment=TA_CENTER,
     ))
 
     styles.add(ParagraphStyle(
         name="RightVietnamese",
         fontName="Arial",
-        fontSize=9,
-        leading=14,
+        fontSize=14,
+        leading=20,
         alignment=TA_RIGHT,
     ))
 
-    elements = []
+    styles.add(ParagraphStyle(
+        name="SmallVietnamese",
+        fontName="Arial",
+        fontSize=12,
+        leading=17,
+    ))
 
-    # Xác định loại dịch vụ và đơn vị tiêu thụ
-    service_name = str(invoice.get("service_name", "")).lower()
+    styles.add(ParagraphStyle(
+        name="TotalMoney",
+        fontName="Arial",
+        fontSize=17,
+        leading=24,
+        alignment=TA_LEFT,
+        spaceBefore=8,
+        spaceAfter=8,
+    ))
+
+    elements = []
+    # =================================================
+    # 4. XÁC ĐỊNH DỊCH VỤ
+    # =================================================
+
+    service_name = str(invoice.get("service_name") or "").lower()
 
     if "nước" in service_name:
         unit = "m³"
         consumption_name = "Lượng nước tiêu thụ"
+        invoice_title = "GIẤY BÁO TIỀN NƯỚC"
     else:
         unit = "kWh"
         consumption_name = "Điện năng tiêu thụ"
+        invoice_title = "GIẤY BÁO TIỀN ĐIỆN"
 
-    # Tiêu đề
+    meters = invoice.get("meters") or []
+
+    # Tương thích với dữ liệu dạng cũ.
+    if not meters:
+        meters = [{
+            "previous_reading": invoice.get("previous_reading", 0),
+            "current_reading": invoice.get("current_reading", 0),
+            "consumption": invoice.get("consumption", 0),
+            "amount": invoice.get("amount", 0),
+            "tariff_splits": [],
+        }]
+
+    # Lấy tất cả biểu giá của hóa đơn.
+    all_splits = []
+
+    for meter in meters:
+        for split in meter.get("tariff_splits", []):
+            all_splits.append(split)
+
+    # Chỉ tổng kết riêng khi có nhiều biểu giá
+    # và VAT của các biểu giá khác nhau.
+    vat_values = {
+        decimal_value(split.get("vat_percent"))
+        for split in all_splits
+    }
+
+    show_split_summary = (
+        len(all_splits) > 1
+        and len(vat_values) > 1
+    )
+
+    # =================================================
+    # 5. PHẦN ĐẦU HÓA ĐƠN
+    # =================================================
+
     elements.append(Paragraph(
-        "HÓA ĐƠN THANH TOÁN",
-        styles["InvoiceTitle"]
+        "<b>CÔNG TY QUẢN LÝ ĐIỆN NƯỚC WE</b>",
+        styles["CompanyTitle"],
     ))
 
     elements.append(Paragraph(
-        f"<b>{safe_text(invoice.get('service_name'))}</b>",
-        styles["CenterVietnamese"]
+        f"<b>{invoice_title}</b>",
+        styles["InvoiceTitle"],
+    ))
+
+    elements.append(Paragraph(
+        f"Dịch vụ: {safe_text(invoice.get('service_name'))}",
+        styles["CenterVietnamese"],
     ))
 
     elements.append(Spacer(1, 8))
 
-    # Thông tin hóa đơn
+    # Mã hóa đơn căn giữa.
     elements.append(Paragraph(
-        "I. THÔNG TIN HÓA ĐƠN",
-        styles["SectionTitle"]
+        f"<b>Mã hóa đơn: "
+        f"{safe_text(invoice.get('bill_code'))}</b>",
+        styles["CenterVietnamese"],
     ))
 
-    invoice_info = [
-        ["Mã hóa đơn:", safe_text(invoice.get("bill_code"))],
-        ["Kỳ hóa đơn:", safe_text(invoice.get("billing_period"))],
-        ["Ngày phát hành:", str(invoice.get("issue_date", ""))],
-        ["Hạn thanh toán:", str(invoice.get("due_date", ""))],
-        ["Trạng thái:", safe_text(invoice.get("status"))],
+    elements.append(Spacer(1, 8))
+
+    # =================================================
+    # 6. THÔNG TIN HÓA ĐƠN VÀ KHÁCH HÀNG
+    # =================================================
+
+    info_items = [
+        ("Kỳ hóa đơn", invoice.get("billing_period")),
+        ("Mã khách hàng", invoice.get("customer_code")),
+        ("Họ và tên", invoice.get("full_name")),
+        ("Số điện thoại", invoice.get("phone")),
+        ("Địa chỉ", invoice.get("address")),
     ]
 
-    info_table = Table(
-        invoice_info,
-        colWidths=[45 * mm, 115 * mm]
-    )
+    for label, value in info_items:
+        elements.append(
+            make_info_paragraph(
+                label,
+                value,
+                styles["NormalVietnamese"],
+            )
+        )
 
-    info_table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (-1, -1), "Arial"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ("TOPPADDING", (0, 0), (-1, -1), 7),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
+        elements.append(Spacer(1, 3))
 
-    elements.append(info_table)
+    elements.append(Spacer(1, 7))
 
-    # Thông tin khách hàng
-    elements.append(Paragraph(
-        "II. THÔNG TIN KHÁCH HÀNG",
-        styles["SectionTitle"]
-    ))
+    # =================================================
+    # 7. CHỈ SỐ TIÊU THỤ - 3 CỘT NGANG
+    # =================================================
 
-    customer_info = [
-        ["Mã khách hàng:", safe_text(invoice.get("customer_code"))],
-        ["Họ và tên:", safe_text(invoice.get("full_name"))],
-        ["Số điện thoại:", safe_text(invoice.get("phone"))],
-        ["Địa chỉ:", safe_text(invoice.get("address"))],
-        ["Mã công tơ:", safe_text(invoice.get("serial_number"))],
+    for meter in meters:
+
+        reading_data = [
+            [
+                Paragraph("<b>Chỉ số cũ</b>", styles["CenterVietnamese"]),
+                Paragraph("<b>Chỉ số mới</b>", styles["CenterVietnamese"]),
+                Paragraph(
+                    f"<b>{safe_text(consumption_name)}</b>",
+                    styles["CenterVietnamese"],
+                ),
+            ],
+            [
+                Paragraph(
+                    f"<b>{format_number(meter.get('previous_reading'))}</b>",
+                    styles["CenterVietnamese"],
+                ),
+                Paragraph(
+                    f"<b>{format_number(meter.get('current_reading'))}</b>",
+                    styles["CenterVietnamese"],
+                ),
+                Paragraph(
+                    f"<b>{format_number(meter.get('consumption'))} "
+                    f"{unit}</b>",
+                    styles["CenterVietnamese"],
+                ),
+            ],
+        ]
+
+        reading_table = Table(
+            reading_data,
+            colWidths=[170 * mm / 3] * 3,
+        )
+
+        reading_table.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, -1), "Arial"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LINEABOVE", (0, 0), (-1, 0), 0.7, colors.grey),
+            ("TOPPADDING", (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        
+
+        elements.append(reading_table)
+        elements.append(Spacer(1, 8))
+
+    # =================================================
+    # 8. BẢNG TÍNH TIỀN THEO BẬC THANG
+    # =================================================
+
+    for meter in meters:
+
+        tariff_splits = meter.get("tariff_splits", [])
+
+        for split_index, split in enumerate(tariff_splits):
+
+            tiers = split.get("tiers", [])
+
+            tier_data = [[
+                "Bậc",
+                "Khoảng định mức",
+                "Sản lượng",
+                "Đơn giá",
+                "Thành tiền",
+            ]]
+
+            for tier in tiers:
+
+                from_value = tier.get("from_value")
+                to_value = tier.get("to_value")
+
+                if to_value is None:
+                    range_text = (
+                        f"Từ {format_number(from_value)} trở lên"
+                    )
+                else:
+                    range_text = (
+                        f"{format_number(from_value)}"
+                        f" - {format_number(to_value)}"
+                    )
+
+                tier_data.append([
+                    str(tier.get("tier_order", "")),
+                    safe_text(range_text),
+                    format_number(tier.get("consumption")),
+                    format_money(tier.get("unit_price")),
+                    format_money(tier.get("amount")),
+                ])
+
+            if tiers:
+
+                tier_table = Table(
+                    tier_data,
+                    colWidths=[
+                        12 * mm,
+                        42 * mm,
+                        28 * mm,
+                        40 * mm,
+                        48 * mm,
+                    ],
+                    repeatRows=1,
+                )
+
+                tier_table.setStyle(TableStyle([
+                    ("FONTNAME", (0, 0), (-1, -1), "Arial"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 12),
+                    ("BACKGROUND", (0, 0), (-1, 0),
+                     colors.HexColor("#DCE6F1")),
+                    ("ALIGN", (0, 0), (0, -1), "CENTER"),
+                    ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ]))
+                
+
+                elements.append(tier_table)
+
+            else:
+                elements.append(Paragraph(
+                    "Chưa có dữ liệu chi tiết các bậc giá.",
+                    styles["SmallVietnamese"],
+                ))
+
+            elements.append(Spacer(1, 5))
+
+            # Chỉ hiện tổng kết riêng khi:
+            # - Có nhiều biểu giá.
+            # - VAT của các biểu giá khác nhau.
+            if show_split_summary:
+
+                elements.append(
+                    make_split_summary(split, styles)
+                )
+
+                elements.append(Spacer(1, 8))
+
+    # =================================================
+    # 9. TỔNG HỢP TIỀN TOÀN HÓA ĐƠN
+    # =================================================
+
+    elements.append(Spacer(1, 5))
+
+    payment_items = [
+        ("Tiền tiêu thụ", invoice.get("subtotal")),
+        ("Phí môi trường", invoice.get("fee_amount")),
+        ("Thuế VAT", invoice.get("tax_amount")),
     ]
 
-    customer_table = Table(
-        customer_info,
-        colWidths=[45 * mm, 115 * mm]
-    )
+    for label, value in payment_items:
 
-    customer_table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (-1, -1), "Arial"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ("TOPPADDING", (0, 0), (-1, -1), 7),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
+        elements.append(
+            make_info_paragraph(
+                label,
+                format_money(value),
+                styles["NormalVietnamese"],
+            )
+        )
 
-    elements.append(customer_table)
+        elements.append(Spacer(1, 4))
 
-    # Chi tiết tiêu thụ
+    # Tổng tiền căn trái.
     elements.append(Paragraph(
-        "III. CHI TIẾT TIÊU THỤ",
-        styles["SectionTitle"]
+        f"<b>Tổng tiền: "
+        f"{format_money(invoice.get('total_amount'))}</b>",
+        styles["TotalMoney"],
     ))
 
-    consumption_data = [
-        ["Chỉ số cũ", "Chỉ số mới", "Tiêu thụ", "Đơn vị"],
-        [
-            str(invoice.get("previous_reading", 0)),
-            str(invoice.get("current_reading", 0)),
-            str(invoice.get("consumption", 0)),
-            unit,
-        ],
-    ]
+    elements.append(Spacer(1, 10))
 
-    consumption_table = Table(
-        consumption_data,
-        colWidths=[40 * mm, 40 * mm, 40 * mm, 40 * mm]
-    )
-
-    consumption_table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (-1, -1), "Arial"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DCE6F1")),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("TOPPADDING", (0, 0), (-1, -1), 9),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
-    ]))
-
-    elements.append(consumption_table)
-
-    # Tổng hợp thanh toán
-    elements.append(Paragraph(
-        "IV. TỔNG HỢP THANH TOÁN",
-        styles["SectionTitle"]
-    ))
-
-    payment_data = [
-        ["Khoản mục", "Số tiền"],
-        ["Tiền tiêu thụ", format_money(invoice.get("subtotal"))],
-        ["Phí môi trường", format_money(invoice.get("fee_amount"))],
-        ["Thuế VAT", format_money(invoice.get("tax_amount"))],
-        ["TỔNG THANH TOÁN", format_money(invoice.get("total_amount"))],
-    ]
-
-    payment_table = Table(
-        payment_data,
-        colWidths=[95 * mm, 65 * mm]
-    )
-
-    payment_table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (-1, -1), "Arial"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DCE6F1")),
-        ("ALIGN", (1, 1), (1, -1), "RIGHT"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("TOPPADDING", (0, 0), (-1, -1), 9),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
-        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E2F0D9")),
-        ("FONTNAME", (0, -1), (-1, -1), "Arial"),
-    ]))
-
-    elements.append(payment_table)
-
-    elements.append(Spacer(1, 20))
+    # =================================================
+    # 10. HẠN THANH TOÁN VÀ LỜI CẢM ƠN
+    # =================================================
 
     elements.append(Paragraph(
-        f"<b>{consumption_name}: "
-        f"{safe_text(invoice.get('consumption', 0))} {unit}</b>",
-        styles["RightVietnamese"]
+        f"<b>Hạn thanh toán: "
+        f"{format_date(invoice.get('due_date'))}</b>",
+        styles["CenterVietnamese"],
     ))
 
-    elements.append(Spacer(1, 12))
+    elements.append(Spacer(1, 8))
 
     elements.append(Paragraph(
         "Vui lòng thanh toán đúng hạn. "
         "Xin cảm ơn quý khách đã sử dụng dịch vụ!",
-        styles["CenterVietnamese"]
+        styles["CenterVietnamese"],
     ))
 
-    # Xuất PDF
+    # =================================================
+    # 11. XUẤT FILE PDF
+    # =================================================
+
     doc.build(elements)
 
     return str(output_file)

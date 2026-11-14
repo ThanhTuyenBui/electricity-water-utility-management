@@ -1,16 +1,20 @@
 from datetime import datetime
+import os
 
 
 class FakeSMSProvider:
 
     def send_sms(self, phone_number: str, message: str):
 
-        print("\n==============================")
-        print("        MOCK SMS")
-        print("==============================")
-        print(f"To      : {phone_number}")
-        print(f"Message : {message}")
-        print("==============================\n")
+        if os.getenv("APP_ENV", "development") == "development":
+            print("\n==============================")
+            print("        MOCK SMS - TEST")
+            print("==============================")
+            print(f"To      : {phone_number}")
+            print(f"Message : {message}")
+            print("==============================\n")
+        else:
+            print("[MOCK SMS] SMS request processed.")
 
         return {
             "phone_number": phone_number,

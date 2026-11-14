@@ -1,25 +1,35 @@
+
 # Kết nối database.
 # Lấy user đang đăng nhập từ JWT.
 # Kiểm tra tài khoản có ACTIVE hay không.
 # Kiểm tra quyền Admin, NhanVien, KhachHang.
+
 import jwt
+
+from types import SimpleNamespace
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.core.config import settings
-from app.database.database import SessionLocal
-from app.models.user import User
-from app.models.role import Role
+from app.core.database import SessionLocal
 
 
-# FastAPI sẽ lấy JWT từ:
-# Authorization: Bearer <token>
+# ============================================================
+# 1. XÁC THỰC JWT
+# ============================================================
+
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/auth/login"
 )
 
+
+# ============================================================
+# 2. KẾT NỐI DATABASE
+# ============================================================
 
 def get_db():
     """
@@ -35,12 +45,17 @@ def get_db():
         db.close()
 
 
+# ============================================================
+# 3. LẤY THÔNG TIN USER ĐANG ĐĂNG NHẬP
+# ============================================================
+
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ):
     """
-    Lấy thông tin user từ JWT token.
+    Giải mã JWT và lấy thông tin user bằng SQL thuần.
+    Chỉ tài khoản ACTIVE mới được sử dụng hệ thống.
     """
 
     credentials_exception = HTTPException(
@@ -67,28 +82,53 @@ def get_current_user(
 
         user_id = int(user_id)
 
-    except (jwt.InvalidTokenError, ValueError):
+    except (jwt.InvalidTokenError, ValueError, TypeError):
         raise credentials_exception
 
-    # Tìm user trong database
-    user = (
-        db.query(User)
-        .filter(User.user_id == user_id)
-        .first()
-    )
+    # Truy vấn user và role bằng SQL thuần
+    query = text("""
+        SELECT
+            u.user_id,
+            u.role_id,
+            u.status,
+            r.role_name
+        FROM users u
+        LEFT JOIN roles r
+            ON u.role_id = r.role_id
+        WHERE u.user_id = :user_id
+    """)
 
+    user = db.execute(
+        query,
+        {"user_id": user_id}
+    ).mappings().first()
+
+    # Không tìm thấy tài khoản
     if user is None:
         raise credentials_exception
 
-    # Chỉ tài khoản ACTIVE mới được sử dụng hệ thống
-    if user.status != "ACTIVE":
+    # Kiểm tra trạng thái tài khoản
+    if user["status"] != "ACTIVE":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tài khoản không hoạt động"
         )
 
-    return user
+    # Chuyển kết quả SQL thành object thông thường
+    # Không phải SQLAlchemy ORM Model
+    current_user = SimpleNamespace(
+        user_id=user["user_id"],
+        role_id=user["role_id"],
+        status=user["status"],
+        role_name=user["role_name"]
+    )
 
+    return current_user
+
+
+# ============================================================
+# 4. KIỂM TRA QUYỀN
+# ============================================================
 
 def require_roles(*allowed_roles):
     """
@@ -98,30 +138,22 @@ def require_roles(*allowed_roles):
 
     require_roles("Admin")
 
-    hoặc:
-
     require_roles("Admin", "NhanVien")
     """
 
     def role_checker(
-        current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)
+        current_user=Depends(get_current_user)
     ):
-        # Tìm role của user
-        role = (
-            db.query(Role)
-            .filter(Role.role_id == current_user.role_id)
-            .first()
-        )
 
-        if role is None:
+        # Kiểm tra role có tồn tại không
+        if current_user.role_name is None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Không tìm thấy quyền của tài khoản"
             )
 
-        # Kiểm tra role
-        if role.role_name not in allowed_roles:
+        # Kiểm tra quyền
+        if current_user.role_name not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Bạn không có quyền thực hiện chức năng này"

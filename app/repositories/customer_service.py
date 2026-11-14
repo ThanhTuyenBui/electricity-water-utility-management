@@ -342,3 +342,49 @@ def get_pending_stop_customer_service_detail(
     db.commit()
 
     return data
+
+def get_customer_id_by_user_id(
+    db: Session,
+    user_id: int
+):
+    result = db.execute(
+        text("""
+            SELECT customer_id
+            FROM customers
+            WHERE user_id = :user_id
+        """),
+        {"user_id": user_id}
+    )
+
+    return result.scalar()
+
+
+def create_account_notification(
+    db: Session,
+    customer_id: int,
+    phone_number: str,
+    status: str,
+    error_message: str | None = None
+):
+    result = db.execute(
+        text("""
+            SELECT public.create_account_notification(
+                :customer_id,
+                :phone_number,
+                :status,
+                :error_message
+            )
+        """),
+        {
+            "customer_id": customer_id,
+            "phone_number": phone_number,
+            "status": status,
+            "error_message": error_message
+        }
+    )
+
+    notification_id = result.scalar()
+
+    db.commit()
+
+    return notification_id

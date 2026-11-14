@@ -13,7 +13,6 @@ from app.core.dependencies import (
     require_roles
 )
 
-from app.models.user import User
 
 from app.schemas.customer import (
     CustomerSelfUpdate,
@@ -38,7 +37,7 @@ router = APIRouter()
 @router.get("/me")
 def get_my_customer(
 
-    current_user: User = Depends(
+    current_user = Depends(
         require_roles("KhachHang")
     ),
 
@@ -69,7 +68,7 @@ def update_my_customer(
 
     data: CustomerSelfUpdate,
 
-    current_user: User = Depends(
+    current_user = Depends(
         require_roles("KhachHang")
     ),
 
@@ -158,7 +157,7 @@ def get_customers(
         default="ASC"
     ),
 
-    current_user: User = Depends(
+    current_user = Depends(
         require_roles(
             "Admin",
             "NhanVien"
@@ -266,7 +265,7 @@ def change_customer_status(
 
     data: CustomerStatusUpdate,
 
-    current_user: User = Depends(
+    current_user = Depends(
         require_roles(
             "Admin",
             "NhanVien"

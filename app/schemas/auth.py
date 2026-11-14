@@ -1,8 +1,13 @@
+
 from pydantic import BaseModel, Field
 
 
-# Dữ liệu khách hàng gửi khi đăng ký
+# ============================================================
+# 1. ĐĂNG KÝ KHÁCH HÀNG
+# ============================================================
+
 class RegisterRequest(BaseModel):
+
     username: str = Field(
         min_length=4,
         max_length=50
@@ -34,28 +39,49 @@ class RegisterRequest(BaseModel):
     )
 
 
-#TokenResponse là kết quả sau khi đăng nhập thành công:
+# ============================================================
+# 2. TOKEN RESPONSE
+# ============================================================
+
 class TokenResponse(BaseModel):
+
     access_token: str
     token_type: str
 
-#UserResponse dùng để trả thông tin tài khoản mà không trả password_hash
+
+# ============================================================
+# 3. THÔNG TIN TÀI KHOẢN
+# ============================================================
+
 class UserResponse(BaseModel):
+
     user_id: int
     username: str
     role_id: int
     status: str
     email: str
-    class Config:
-        from_attributes = True
+
+
+# ============================================================
+# 4. ĐẶT LẠI MẬT KHẨU
+# ============================================================
+
 class ResetPasswordRequest(BaseModel):
+
     token: str
+
     new_password: str = Field(
         min_length=6,
         max_length=100
-    )      
+    )
+
+
+# ============================================================
+# 5. ĐỔI MẬT KHẨU
+# ============================================================
 
 class ChangePasswordRequest(BaseModel):
+
     old_password: str = Field(
         min_length=6,
         max_length=100

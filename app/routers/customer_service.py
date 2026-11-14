@@ -13,7 +13,6 @@ from app.core.dependencies import (
     require_roles
 )
 
-from app.models.user import User
 
 from app.schemas.customer_service import (
     CounterRegisterRequest,
@@ -118,7 +117,7 @@ def get_detail(
 )
 def additional_service(
     data: AdditionalServiceRequest,
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     result = db.execute(
@@ -171,7 +170,7 @@ def additional_service(
 )
 def approve_customer_services(
     customer_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
@@ -203,7 +202,7 @@ def approve_customer_services(
 def reject_customer_services(
     customer_id: int,
     reason: str,
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     if not reason.strip():
@@ -244,7 +243,7 @@ def reject_customer_services(
 )
 def counter_register(
     data: CounterRegisterRequest,
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
@@ -283,7 +282,7 @@ def counter_register(
 )
 def request_stop(
     customer_service_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     result = db.execute(

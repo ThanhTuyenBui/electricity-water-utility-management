@@ -14,7 +14,6 @@ from app.core.dependencies import (
     require_roles
 )
 
-from app.models.user import User
 
 from app.schemas.tariff import (
     TariffCreate,
@@ -51,7 +50,7 @@ router = APIRouter(
     ]
 )
 def api_get_tariffs(
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     result = get_tariffs(
@@ -79,7 +78,7 @@ def api_get_tariffs(
 )
 def api_get_tariff_detail(
     tariff_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     result = get_tariff_detail(

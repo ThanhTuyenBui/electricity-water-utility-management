@@ -43,74 +43,159 @@ def process_bill_calculation(db: Session, bill_id: int):
     return result.scalar_one()
 
 
+
+
 def get_invoice_data(db: Session, bill_id: int):
-    """
-    Lấy thông tin hóa đơn, khách hàng, dịch vụ và công tơ
-    phục vụ chức năng xuất hóa đơn PDF.
-    """
-    result = db.execute(
-        text("""
-            SELECT
-                b.bill_id,
-                b.bill_code,
-                b.billing_period,
-                b.issue_date,
-                b.due_date,
-                b.status,
+    try:
+        # 1. Lấy thông tin hóa đơn, khách hàng và dịch vụ
+        result = db.execute(
+            text("""
+                SELECT
+                    b.bill_id,
+                    b.bill_code,
+                    b.billing_period,
+                    b.issue_date,
+                    b.due_date,
+                    b.status,
+                    b.subtotal,
+                    b.fee_amount,
+                    b.tax_amount,
+                    b.total_amount,
+                    c.customer_code,
+                    c.full_name,
+                    c.phone,
+                    c.address,
+                    s.service_name
+                FROM bills b
+                JOIN customer_services cs
+                    ON b.customer_service_id = cs.customer_service_id
+                JOIN customers c
+                    ON cs.customer_id = c.customer_id
+                JOIN services s
+                    ON cs.service_id = s.service_id
+                WHERE b.bill_id = :bill_id
+            """),
+            {"bill_id": bill_id}
+        )
 
-                b.subtotal,
-                b.fee_amount,
-                b.tax_amount,
-                b.total_amount,
+        invoice_row = result.mappings().first()
 
-                c.customer_code,
-                c.full_name,
-                c.phone,
-                c.address,
+        if invoice_row is None:
+            return None
 
-                s.service_name,
+        invoice = dict(invoice_row)
 
-                m.meter_id,
-                m.serial_number,
-                m.meter_type,
+        # 2. Lấy các công tơ và chỉ số thuộc hóa đơn
+        result = db.execute(
+            text("""
+                SELECT
+                    bd.detail_id,
+                    bd.previous_reading,
+                    bd.current_reading,
+                    bd.consumption,
+                    bd.amount,
+                    m.meter_id,
+                    m.serial_number,
+                    m.meter_type
+                FROM bill_details bd
+                JOIN meters m
+                    ON bd.meter_id = m.meter_id
+                WHERE bd.bill_id = :bill_id
+                ORDER BY m.meter_id
+            """),
+            {"bill_id": bill_id}
+        )
 
-                bd.previous_reading,
-                bd.current_reading,
-                bd.consumption,
-                bd.amount
+        detail_rows = result.mappings().all()
 
-            FROM bills b
+        if not detail_rows:
+            return None
 
-            JOIN customer_services cs
-                ON b.customer_service_id = cs.customer_service_id
+        meters = []
 
-            JOIN customers c
-                ON cs.customer_id = c.customer_id
+        # 3. Lấy biểu giá và chi tiết từng bậc giá
+        for detail_row in detail_rows:
+            detail = dict(detail_row)
 
-            JOIN services s
-                ON cs.service_id = s.service_id
+            result = db.execute(
+                text("""
+                    SELECT
+                        tariff_split_id,
+                        tariff_id,
+                        start_date,
+                        end_date,
+                        total_days,
+                        consumption,
+                        subtotal,
+                        environment_fee_percent,
+                        fee_amount,
+                        vat_percent,
+                        tax_amount,
+                        total_amount
+                    FROM bill_detail_tariff_splits
+                    WHERE detail_id = :detail_id
+                    ORDER BY start_date, tariff_split_id
+                """),
+                {"detail_id": detail["detail_id"]}
+            )
 
-            JOIN bill_details bd
-                ON b.bill_id = bd.bill_id
+            split_rows = result.mappings().all()
+            tariff_splits = []
 
-            JOIN meters m
-                ON bd.meter_id = m.meter_id
+            for split_row in split_rows:
+                split = dict(split_row)
 
-            WHERE b.bill_id = :bill_id
+                result = db.execute(
+                    text("""
+                        SELECT
+                            tier_order,
+                            from_value,
+                            to_value,
+                            consumption,
+                            unit_price,
+                            amount,
+                            adjusted_allowance
+                        FROM bill_detail_tiers
+                        WHERE tariff_split_id = :tariff_split_id
+                        ORDER BY tier_order
+                    """),
+                    {"tariff_split_id": split["tariff_split_id"]}
+                )
 
-            ORDER BY m.meter_id
-        """),
-        {"bill_id": bill_id}
-    )
+                split["tiers"] = [
+                    dict(row) for row in result.mappings().all()
+                ]
 
-    rows = result.mappings().all()
+                tariff_splits.append(split)
 
-    if not rows:
-        return None
+            detail["tariff_splits"] = tariff_splits
+            meters.append(detail)
 
-    # Tạm thời mỗi hóa đơn sử dụng một công tơ.
-    # Nếu có nhiều công tơ, cần điều chỉnh mẫu PDF để hiển thị nhiều dòng.
-    return dict(rows[0])
+        invoice["meters"] = meters
+
+        # 4. Giữ các trường phẳng để tương thích PDF
+        if meters:
+            invoice.update({
+                "meter_id": meters[0]["meter_id"],
+                "serial_number": meters[0]["serial_number"],
+                "meter_type": meters[0]["meter_type"],
+                "previous_reading": meters[0]["previous_reading"],
+                "current_reading": meters[0]["current_reading"],
+                "consumption": meters[0]["consumption"],
+                "amount": meters[0]["amount"],
+            })
+
+        return invoice
+
+    except Exception:
+        import traceback
+
+        print("\n========== LOI GET_INVOICE_DATA ==========")
+        print(f"Bill ID: {bill_id}")
+        traceback.print_exc()
+        print("==========================================\n")
+
+        raise
 
 
 def update_bill_pdf_url(db: Session, bill_id: int, pdf_url: str):
